@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Apr 09, 2026 at 09:34 PM
+-- Generation Time: Apr 14, 2026 at 08:51 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -50,7 +50,7 @@ CREATE TABLE `angajati` (
   `cnp` varchar(13) NOT NULL,
   `email` varchar(100) NOT NULL,
   `telefon` varchar(255) NOT NULL,
-  `=data_angajare` date NOT NULL,
+  `data_angajare` date NOT NULL,
   `id_departament` int(11) NOT NULL,
   `id_pozitie` int(11) NOT NULL,
   `id_manager` int(11) DEFAULT NULL,
@@ -198,13 +198,18 @@ CREATE TABLE `proiecte` (
 -- Indexes for table `alocari_proiecte`
 --
 ALTER TABLE `alocari_proiecte`
-  ADD PRIMARY KEY (`id_alocare`);
+  ADD PRIMARY KEY (`id_alocare`),
+  ADD KEY `fk_alocare_angajat` (`id_angajat`),
+  ADD KEY `fk_alocare_proiect` (`id_proiect`);
 
 --
 -- Indexes for table `angajati`
 --
 ALTER TABLE `angajati`
-  ADD PRIMARY KEY (`id_angajat`);
+  ADD PRIMARY KEY (`id_angajat`),
+  ADD KEY `fk_angajat_departament` (`id_departament`),
+  ADD KEY `fk_angajat_pozitie` (`id_pozitie`),
+  ADD KEY `fk_angajat_manager` (`id_manager`);
 
 --
 -- Indexes for table `beneficii`
@@ -216,37 +221,46 @@ ALTER TABLE `beneficii`
 -- Indexes for table `beneficii_angajati`
 --
 ALTER TABLE `beneficii_angajati`
-  ADD PRIMARY KEY (`id_angajat`,`id_beneficiu`);
+  ADD PRIMARY KEY (`id_angajat`,`id_beneficiu`),
+  ADD KEY `fk_beneficii_beneficiu` (`id_beneficiu`);
 
 --
 -- Indexes for table `concedii`
 --
 ALTER TABLE `concedii`
-  ADD PRIMARY KEY (`id_concediu`);
+  ADD PRIMARY KEY (`id_concediu`),
+  ADD KEY `fk_concediu_angajat` (`id_angajat`),
+  ADD KEY `fk_concediu_aprobator` (`id_aprobator`);
 
 --
 -- Indexes for table `departamente`
 --
 ALTER TABLE `departamente`
-  ADD PRIMARY KEY (`id_departament`);
+  ADD PRIMARY KEY (`id_departament`),
+  ADD KEY `fk_departament_manager` (`id_manager`);
 
 --
 -- Indexes for table `evaluari`
 --
 ALTER TABLE `evaluari`
-  ADD PRIMARY KEY (`id_evaluare`);
+  ADD PRIMARY KEY (`id_evaluare`),
+  ADD KEY `fk_evaluare_angajat` (`id_angajat`),
+  ADD KEY `fk_evaluare_evaluator` (`id_evaluator`);
 
 --
 -- Indexes for table `istoric_salarial`
 --
 ALTER TABLE `istoric_salarial`
-  ADD PRIMARY KEY (`id_istoric`);
+  ADD PRIMARY KEY (`id_istoric`),
+  ADD KEY `fk_istoric_angajat` (`id_angajat`);
 
 --
 -- Indexes for table `manageri`
 --
 ALTER TABLE `manageri`
-  ADD PRIMARY KEY (`id_manager`);
+  ADD PRIMARY KEY (`id_manager`),
+  ADD KEY `fk_manager_angajat` (`id_angajat`),
+  ADD KEY `fk_manager_departament` (`id_departament`);
 
 --
 -- Indexes for table `pozitii`
@@ -323,6 +337,65 @@ ALTER TABLE `pozitii`
 --
 ALTER TABLE `proiecte`
   MODIFY `id_proiect` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- Constraints for dumped tables
+--
+
+--
+-- Constraints for table `alocari_proiecte`
+--
+ALTER TABLE `alocari_proiecte`
+  ADD CONSTRAINT `fk_alocare_angajat` FOREIGN KEY (`id_angajat`) REFERENCES `angajati` (`id_angajat`),
+  ADD CONSTRAINT `fk_alocare_proiect` FOREIGN KEY (`id_proiect`) REFERENCES `proiecte` (`id_proiect`);
+
+--
+-- Constraints for table `angajati`
+--
+ALTER TABLE `angajati`
+  ADD CONSTRAINT `fk_angajat_departament` FOREIGN KEY (`id_departament`) REFERENCES `departamente` (`id_departament`),
+  ADD CONSTRAINT `fk_angajat_manager` FOREIGN KEY (`id_manager`) REFERENCES `manageri` (`id_manager`),
+  ADD CONSTRAINT `fk_angajat_pozitie` FOREIGN KEY (`id_pozitie`) REFERENCES `pozitii` (`id_pozitie`);
+
+--
+-- Constraints for table `beneficii_angajati`
+--
+ALTER TABLE `beneficii_angajati`
+  ADD CONSTRAINT `fk_beneficii_angajat` FOREIGN KEY (`id_angajat`) REFERENCES `angajati` (`id_angajat`),
+  ADD CONSTRAINT `fk_beneficii_beneficiu` FOREIGN KEY (`id_beneficiu`) REFERENCES `beneficii` (`id_beneficiu`);
+
+--
+-- Constraints for table `concedii`
+--
+ALTER TABLE `concedii`
+  ADD CONSTRAINT `fk_concediu_angajat` FOREIGN KEY (`id_angajat`) REFERENCES `angajati` (`id_angajat`),
+  ADD CONSTRAINT `fk_concediu_aprobator` FOREIGN KEY (`id_aprobator`) REFERENCES `manageri` (`id_manager`);
+
+--
+-- Constraints for table `departamente`
+--
+ALTER TABLE `departamente`
+  ADD CONSTRAINT `fk_departament_manager` FOREIGN KEY (`id_manager`) REFERENCES `manageri` (`id_manager`);
+
+--
+-- Constraints for table `evaluari`
+--
+ALTER TABLE `evaluari`
+  ADD CONSTRAINT `fk_evaluare_angajat` FOREIGN KEY (`id_angajat`) REFERENCES `angajati` (`id_angajat`),
+  ADD CONSTRAINT `fk_evaluare_evaluator` FOREIGN KEY (`id_evaluator`) REFERENCES `angajati` (`id_angajat`);
+
+--
+-- Constraints for table `istoric_salarial`
+--
+ALTER TABLE `istoric_salarial`
+  ADD CONSTRAINT `fk_istoric_angajat` FOREIGN KEY (`id_angajat`) REFERENCES `angajati` (`id_angajat`);
+
+--
+-- Constraints for table `manageri`
+--
+ALTER TABLE `manageri`
+  ADD CONSTRAINT `fk_manager_angajat` FOREIGN KEY (`id_angajat`) REFERENCES `angajati` (`id_angajat`),
+  ADD CONSTRAINT `fk_manager_departament` FOREIGN KEY (`id_departament`) REFERENCES `departamente` (`id_departament`);
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
