@@ -78,3 +78,72 @@ Scopul principal este centralizarea tuturor informațiilor legate de resursele u
 - Vizualizarea costului total al beneficiilor per angajat și per departament
 
 ---
+## Tehnologii Folosite
+
+### Backend: Python (Flask)
+
+**Ce este:** Python este un limbaj de programare de nivel înalt, cunoscut pentru sintaxa sa clară și lizibilă. Flask este un micro-framework web pentru Python, ideal pentru construirea de API-uri REST.
+
+**De ce l-am ales:**
+- **Ușor de învățat și utilizat** — sintaxă curată, documentație excelentă
+- **Ecosistem bogat pentru ML/AI** — biblioteci precum scikit-learn, pandas, numpy sunt esențiale pentru modulul de predicție a churn-ului
+- **Flask este minimalist** — oferă doar ce este necesar, fără convenționalisme forțate, permițând control total asupra arhitecturii
+- **Conexiune nativă cu MySQL** — prin biblioteca `mysql-connector-python` sau `PyMySQL`
+
+**Ce face în proiect:**
+- Expune API-uri REST pentru toate operațiunile CRUD (Create, Read, Update, Delete) pe fiecare entitate
+- Gestionează logica de business (validări, calcule, reguli de aprobare concedii)
+- Rulează modelul de predicție AI pentru calculul riscului de plecare
+- Servește datele către frontend sub formă de JSON
+
+**Biblioteci Python utilizate:**
+| Bibliotecă | Scop |
+|------------|------|
+| `Flask` | Framework web pentru API-uri REST |
+| `Flask-CORS` | Permite comunicarea cross-origin cu frontend-ul |
+| `mysql-connector-python` | Conexiunea la baza de date MySQL |
+| `scikit-learn` | Antrenarea modelului de predicție churn |
+| `pandas` | Manipularea și analiza datelor |
+| `numpy` | Calcule numerice |
+
+---
+## Arhitectura Aplicației
+
+```
+┌─────────────────────────────────────────────────────┐
+│                    FRONTEND                         │
+│              React + Tailwind CSS                   │
+│                                                     │
+│  ┌───────────┐ ┌───────────┐ ┌───────────────────┐  │
+│  │ Dashboard │ │ Angajați  │ │ Proiecte/Evaluări │  │
+│  └───────────┘ └───────────┘ └───────────────────┘  │
+│                      │                              │
+│              HTTP (REST API)                        │
+└──────────────────────┼──────────────────────────────┘
+                       │
+┌──────────────────────┼──────────────────────────────┐
+│                    BACKEND                          │
+│                Python (Flask)                       │
+│                                                     │
+│  ┌──────────┐ ┌──────────────┐ ┌────────────────┐  │
+│  │ API REST │ │ Business     │ │ Modul AI       │  │
+│  │ Endpoints│ │ Logic        │ │ (Predicție     │  │
+│  │          │ │              │ │  Churn)        │  │
+│  └──────────┘ └──────────────┘ └────────────────┘  │
+│                      │                              │
+│             mysql-connector-python                  │
+└──────────────────────┼──────────────────────────────┘
+                       │
+┌──────────────────────┼──────────────────────────────┐
+│                 BAZA DE DATE                        │
+│                    MySQL                            │
+│                                                     │
+│  ┌──────────┐ ┌──────────────┐ ┌────────────────┐  │
+│  │ Tabele   │ │ Proceduri    │ │ Triggere       │  │
+│  │ (11)     │ │ Stocate      │ │                │  │
+│  └──────────┘ └──────────────┘ └────────────────┘  │
+│  ┌──────────┐ ┌──────────────┐                      │
+│  │ Views    │ │ Indecși      │                      │
+│  └──────────┘ └──────────────┘                      │
+└─────────────────────────────────────────────────────┘
+```
