@@ -4,14 +4,12 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
-# 1. DATE DE TEST (MOCK DATA)
 mock_angajati = [
     {"id": 1, "nume": "Ionescu", "prenume": "Andrei", "functie": "Software Developer", "manager_id": None},
     {"id": 2, "nume": "Popescu", "prenume": "Maria", "functie": "Junior Dev", "manager_id": 1},
     {"id": 3, "nume": "Georgescu", "prenume": "Elena", "functie": "HR Manager", "manager_id": None}
 ]
 
-# 2. DEFINIRE RUTE
 @app.route('/')
 def home():
     return "Sistem HR Backend activ!"
@@ -35,11 +33,9 @@ def predict_churn(emp_id):
         "probabilitate": "15%"
     })
 
-# 3. VERIFICARE RUTE (Pus la final, înainte de run, ca să le vadă pe toate)
 print("--- RUTE DECOPERITE DE FLASK ---")
 print(app.url_map)
 print("--------------------------------")
 
-# 4. PORNIRE SERVER
 if __name__ == '__main__':
     app.run(debug=True, port=5001)
