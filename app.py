@@ -27,10 +27,10 @@ def get_employee(emp_id):
 
 @app.route('/api/predict-churn/<int:emp_id>', methods=['GET'])
 def predict_churn(emp_id):
+    #aici se va apela functia scrisa de tine
     return jsonify({
         "id_angajat": emp_id,
-        "risc_plecare": "Low",
-        "probabilitate": "15%"
+        "mesaj": "Astept modelul tau"
     })
 
 print("--- RUTE DECOPERITE DE FLASK ---")
