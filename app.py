@@ -70,6 +70,67 @@ def cauta_angajat():
 
     return jsonify({"mesaj": "Angajatul cu acest email nu a fost gasit"}), 404
 
+@app.route('/api/angajati/departament/<int:dep_id>', methods=['GET'])
+def angajati_per_departament(dep_id):
+    rezultat = []
+    
+    for angajat in mock_angajati:
+        if angajat['id_departament'] == dep_id:
+            rezultat.append(angajat)
+    
+    if len(rezultat) == 0:
+        return jsonify({"mesaj": f"Nu exista angajati in departamentul {dep_id}"}), 404
+        
+    return jsonify(rezultat)
+
+@app.route('/api/angajati', methods=['POST'])
+def adauga_angajat():
+    date_noi = request.get_json()
+    
+    # Logica de business: validam - verifica daca am luat toate campurile obligatorii din SQL
+
+    campuri_obligatorii = ['nume', 'prenume', 'cnp', 'email', 'telefon', 'id_departament', 'id_pozitie']
+    
+    for camp in campuri_obligatorii:
+        if camp not in date_noi or not date_noi[camp]:
+            return jsonify({"eroare": f"Campul '{camp}' este obligatoriu!"}), 400
+            
+    # Validez CNP
+    if len(str(date_noi['cnp'])) != 13:
+        return jsonify({"eroare": "CNP-ul trebuie sa aiba exact 13 cifre!"}), 400
+
+    #generez ID nou
+    nou_id = mock_angajati[-1]['id_angajat'] + 1
+    date_noi['id_angajat'] = nou_id
+    
+    mock_angajati.append(date_noi)
+    
+    return jsonify({"mesaj": "Angajat adaugat cu succes!", "angajat": date_noi}), 201
+
+@app.route('/api/angajati/<int:id_angajat>', methods=['PUT'])
+def actualizeaza_angajat(id_angajat):
+    date_actualizate = request.get_json()
+    
+    for angajat in mock_angajati:
+        if angajat['id_angajat'] == id_angajat:
+            # Actualizăm doar câmpurile pe care le dorim
+            angajat.update(date_actualizate)
+            return jsonify({"mesaj": "Date actualizate!", "angajat": angajat}), 200
+            
+    return jsonify({"eroare": "Angajatul nu a fost gasit"}), 404
+
+@app.route('/api/angajati/<int:id_angajat>', methods=['DELETE'])
+def sterge_angajat(id_angajat):
+    global mock_angajati
+    
+    angajat_de_sters = next((a for a in mock_angajati if a['id_angajat'] == id_angajat), None)
+    
+    if angajat_de_sters:
+        mock_angajati = [a for a in mock_angajati if a['id_angajat'] != id_angajat]
+        return jsonify({"mesaj": f"Angajatul cu ID {id_angajat} a fost sters cu succes"}), 200
+    
+    return jsonify({"eroare": "Angajatul nu a fost gasit"}), 404
+
 print("--- RUTE DECOPERITE DE FLASK ---")
 print(app.url_map)
 print("--------------------------------")
