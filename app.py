@@ -1,9 +1,11 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask import request
+import re
 
 app = Flask(__name__)
 CORS(app)
+regex_email = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
 
 mock_angajati = [
     {
@@ -51,7 +53,7 @@ def get_employee(emp_id):
 
 @app.route('/api/predict-churn/<int:emp_id>', methods=['GET'])
 def predict_churn(emp_id):
-    #aici se va apela functia scrisa de tine
+    #aici se va apela functia scrisa de tine, Miha
     return jsonify({
         "id_angajat": emp_id,
         "mesaj": "Astept modelul tau"
@@ -86,26 +88,48 @@ def angajati_per_departament(dep_id):
 @app.route('/api/angajati', methods=['POST'])
 def adauga_angajat():
     date_noi = request.get_json()
-    
-    # Logica de business: validam - verifica daca am luat toate campurile obligatorii din SQL
+    erori = [] 
 
-    campuri_obligatorii = ['nume', 'prenume', 'cnp', 'email', 'telefon', 'id_departament', 'id_pozitie']
-    
-    for camp in campuri_obligatorii:
+    # 1. Validare câmpuri obligatorii din baza de date
+    campuri = ['nume', 'prenume', 'cnp', 'email', 'telefon', 'an_angajare', 'luna_angajare', 'id_pozitie', 'id_departament', 'id_manager', 'status']
+    for camp in campuri:
         if camp not in date_noi or not date_noi[camp]:
-            return jsonify({"eroare": f"Campul '{camp}' este obligatoriu!"}), 400
-            
-    # Validez CNP
-    if len(str(date_noi['cnp'])) != 13:
-        return jsonify({"eroare": "CNP-ul trebuie sa aiba exact 13 cifre!"}), 400
+            erori.append(f"Campul '{camp}' lipseste.")
 
-    #generez ID nou
+    # 2. Validare Email (doar dacă a fost trimis)
+    email = date_noi.get('email', '')
+    if email and not re.fullmatch(regex_email, email):
+        erori.append("Email invalid.")
+    if any(a['email'] == email for a in mock_angajati):
+        erori.append("Email deja utilizat.")
+
+    # 3. Validare CNP
+    cnp = str(date_noi.get('cnp', ''))
+    if len(cnp) != 13:
+        erori.append("CNP-ul trebuie sa aiba 13 cifre.")
+
+    # 4. Validare Telefon
+    tel = str(date_noi.get('telefon', '')).replace(" ", "")
+    if len(tel) < 7 or len(tel) > 17:
+        erori.append("Telefonul trebuie sa aiba intre 7 si 17 cifre.")
+
+    # 5. Validarea anului si lunii angajarii
+    an = date_noi.get('an_angajare')
+    luna = date_noi.get('luna_angajare')
+    if an and not (1900 <= int(an) <= 2026):
+        erori.append("Anul trebuie sa fie intre 1900 si 2026.")
+    if luna and not (1 <= int(luna) <= 12):
+        erori.append("Luna trebuie sa fie intre 1 si 12.")
+
+    if erori:
+
+        return jsonify({"status": "eroare", "mesaje": erori}), 400
+
     nou_id = mock_angajati[-1]['id_angajat'] + 1
     date_noi['id_angajat'] = nou_id
-    
     mock_angajati.append(date_noi)
     
-    return jsonify({"mesaj": "Angajat adaugat cu succes!", "angajat": date_noi}), 201
+    return jsonify({"mesaj": "Angajat adaugat!", "angajat": date_noi}), 201
 
 @app.route('/api/angajati/<int:id_angajat>', methods=['PUT'])
 def actualizeaza_angajat(id_angajat):
