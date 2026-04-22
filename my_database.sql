@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Apr 20, 2026 at 01:58 PM
+-- Generation Time: Apr 21, 2026 at 10:37 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -495,6 +495,8 @@ ALTER TABLE `alocari_proiecte`
 --
 ALTER TABLE `angajati`
   ADD PRIMARY KEY (`id_angajat`),
+  ADD UNIQUE KEY `email` (`email`),
+  ADD UNIQUE KEY `cnp` (`cnp`),
   ADD KEY `idx_angajat_departament` (`id_departament`),
   ADD KEY `idx_angajat_pozitie` (`id_pozitie`),
   ADD KEY `idx_angajat_manager` (`id_manager`),
