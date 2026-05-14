@@ -3,6 +3,7 @@ from flask_cors import CORS
 from flask import request
 import re
 import mysql.connector
+from datetime import datetime
 
 app = Flask(__name__)
 CORS(app)
@@ -359,7 +360,7 @@ def get_profil_complet(id):
 
         # Proiecte Active
         query_proiecte = """
-            SELECT p.nume, ap.rol_proiect, ap.ore_alocate
+            SELECT DISTINCT p.nume, ap.rol_proiect, ap.ore_alocate
             FROM alocari_proiecte ap
             JOIN proiecte p ON ap.id_proiect = p.id_proiect
             WHERE ap.id_angajat = %s AND p.status = 'in desfasurare'
@@ -370,6 +371,248 @@ def get_profil_complet(id):
         return jsonify(profil), 200
     except mysql.connector.Error as err:
         return jsonify({"status": "eroare_db", "detalii": str(err)}), 500
+    finally:
+        if 'conn' in locals(): conn.close()
+
+@app.route('/api/concedii', methods=['POST'])
+def adauga_concediu():
+    date = request.get_json()
+    id_angajat = date.get('id_angajat')
+    data_start = date.get('data_start')
+    data_sfarsit = date.get('data_sfarsit')
+    tip_concediu = date.get('tip') # 'odihna', 'boala', 'concediu fara plata'
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        #Validare format dată
+        start = datetime.strptime(data_start, '%Y-%m-%d')
+        sfarsit = datetime.strptime(data_sfarsit, '%Y-%m-%d')
+
+        if start > sfarsit:
+            return jsonify({"status": "eroare", "mesaj": "Data de inceput nu poate fi dupa data de sfarsit."}), 400
+
+        #Validare, Angajatul nu trebuie să aibă alt concediu în această perioadă
+        query_suprapunere = """
+            SELECT id_concediu FROM concedii 
+            WHERE id_angajat = %s AND status != 'respins'
+            AND ((data_start <= %s AND data_sfarsit >= %s) 
+                 OR (data_start <= %s AND data_sfarsit >= %s))
+        """
+        cursor.execute(query_suprapunere, (id_angajat, sfarsit, start, start, sfarsit))
+        if cursor.fetchone():
+            return jsonify({"status": "eroare", "mesaj": "Angajatul are deja un concediu programat in aceasta perioada."}), 400
+
+        #Inserare (cu status default 'in asteptare')
+        query_insert = """
+            INSERT INTO concedii (id_angajat, id_aprobator, tip, data_start, data_sfarsit, status)
+            VALUES (%s, %s, %s, %s, %s, 'in asteptare')
+        """
+        # Folosim un id_aprobator (ar trebui sa fie ID-ul managerului din tabelul manageri)
+        id_aprobator = date.get('id_aprobator', 1) 
+        
+        cursor.execute(query_insert, (id_angajat, id_aprobator, tip_concediu, data_start, data_sfarsit))
+        conn.commit()
+
+        return jsonify({"status": "succes", "mesaj": "Cererea de concediu a fost inregistrata si asteapta aprobarea."}), 201
+
+    except ValueError:
+        return jsonify({"status": "eroare", "mesaj": "Formatul datei trebuie sa fie YYYY-MM-DD."}), 400
+    except mysql.connector.Error as err:
+        return jsonify({"status": "eroare_db", "detalii": str(err)}), 500
+    finally:
+        if 'conn' in locals(): conn.close()
+
+@app.route('/api/concedii/decizie/<int:id_concediu>', methods=['PUT'])
+def decide_concediu(id_concediu):
+    date = request.get_json()
+    nou_status = date.get('status')  # status = 'aprobat' sau 'respins'
+    id_manager_care_aproba = date.get('id_manager')
+
+    if nou_status not in ['aprobat', 'respins']:
+        return jsonify({"status": "eroare", "mesaj": "Status invalid. Folositi 'aprobat' sau 'respins'."}), 400
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Verificăm dacă cererea există și cine este aprobatorul 
+        cursor.execute("SELECT id_aprobator, status FROM concedii WHERE id_concediu = %s", (id_concediu,))
+        concediu = cursor.fetchone()
+
+        if not concediu:
+            return jsonify({"status": "eroare", "mesaj": "Cererea de concediu nu a fost gasita."}), 404
+        
+        # Logica de Business: Verificăm dacă cel care dă click este managerul corect
+        if concediu['id_aprobator'] != id_manager_care_aproba:
+            return jsonify({"status": "eroare", "mesaj": "Nu aveti permisiunea de a aproba aceasta cerere."}), 403
+
+        # Actualizăm statusul
+        cursor.execute(
+            "UPDATE concedii SET status = %s WHERE id_concediu = %s",
+            (nou_status, id_concediu)
+        )
+        
+        # Inserăm o notificare automată pentru angajat (folosind tabelul notificari)
+        # Aflăm ID-ul angajatului
+        cursor.execute("SELECT id_angajat FROM concedii WHERE id_concediu = %s", (id_concediu,))
+        id_angajat = cursor.fetchone()['id_angajat']
+        
+        mesaj_notificare = f"Cererea ta de concediu a fost {nou_status}."
+        cursor.execute(
+            "INSERT INTO notificari (id_angajat, tip, mesaj) VALUES (%s, 'concediu', %s)",
+            (id_angajat, mesaj_notificare)
+        )
+
+        conn.commit()
+        return jsonify({"status": "succes", "mesaj": f"Concediul a fost {nou_status} cu succes."}), 200
+
+    except mysql.connector.Error as err:
+        return jsonify({"status": "eroare_db", "detalii": str(err)}), 500
+    finally:
+        if 'conn' in locals(): conn.close()
+
+@app.route('/api/departamente', methods=['GET', 'POST'])
+def gestionare_departamente():
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    if request.method == 'GET':
+        cursor.execute("SELECT * FROM departamente ORDER BY nume")
+        departamente = cursor.fetchall()
+        conn.close()
+        return jsonify(departamente), 200
+
+    if request.method == 'POST':
+        date = request.get_json()
+        nume = date.get('nume')
+        descriere = date.get('descriere', '')
+
+        if not nume:
+            return jsonify({"status": "eroare", "mesaj": "Numele departamentului este obligatoriu"}), 400
+
+        try:
+            cursor.execute("INSERT INTO departamente (nume, descriere) VALUES (%s, %s)", (nume, descriere))
+            conn.commit()
+            return jsonify({"status": "succes", "mesaj": "Departament creat"}), 201
+        except mysql.connector.Error as err:
+            return jsonify({"status": "eroare_db", "detalii": str(err)}), 500
+        finally:
+            conn.close()
+
+@app.route('/api/pozitii', methods=['GET', 'POST'])
+def gestionare_pozitii():
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    if request.method == 'GET':
+        cursor.execute("SELECT * FROM pozitii")
+        pozitii = cursor.fetchall()
+        conn.close()
+        return jsonify(pozitii), 200
+
+    if request.method == 'POST':
+        date = request.get_json()
+        titlu = date.get('titlu')
+        id_dept = date.get('id_departament')
+        s_min = float(date.get('salariu_min', 0))
+        s_max = float(date.get('salariu_max', 0))
+
+        # Validare Grilă Salarială
+        if s_min >= s_max:
+            return jsonify({
+                "status": "eroare", 
+                "mesaj": "Salariul minim trebuie sa fie mai mic decat cel maxim. Verifica datele de piata!"
+            }), 400
+
+        try:
+            query = "INSERT INTO pozitii (titlu, id_departament, salariu_min, salariu_max) VALUES (%s, %s, %s, %s)"
+            cursor.execute(query, (titlu, id_dept, s_min, s_max))
+            conn.commit()
+            return jsonify({"status": "succes", "mesaj": "Pozitie adaugata in grila salariala"}), 201
+        except mysql.connector.Error as err:
+            return jsonify({"status": "eroare_db", "detalii": str(err)}), 500
+        finally:
+            conn.close()
+
+@app.route('/api/proiecte', methods=['GET', 'POST'])
+def gestionare_proiecte():
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    if request.method == 'GET':
+        cursor.execute("SELECT * FROM proiecte ORDER BY data_start DESC")
+        proiecte = cursor.fetchall()
+        conn.close()
+        return jsonify(proiecte), 200
+
+    if request.method == 'POST':
+        date = request.get_json()
+        try:
+            query = """
+                INSERT INTO proiecte (nume, descriere, data_start, data_sfarsit, status, buget)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """
+            valori = (date['nume'], date['descriere'], date['data_start'], 
+                      date['data_sfarsit'], date['status'], date['buget'])
+            cursor.execute(query, valori)
+            conn.commit()
+            return jsonify({"status": "succes", "mesaj": "Proiect creat cu succes"}), 201
+        except Exception as e:
+            return jsonify({"status": "eroare", "detalii": str(e)}), 400
+        finally:
+            conn.close()
+
+@app.route('/api/beneficii', methods=['GET', 'POST'])
+def gestionare_beneficii():
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    if request.method == 'GET':
+        cursor.execute("SELECT * FROM beneficii")
+        beneficii = cursor.fetchall()
+        conn.close()
+        return jsonify(beneficii), 200
+
+    if request.method == 'POST':
+        date = request.get_json()
+        try:
+            cursor.execute("INSERT INTO beneficii (nume, descriere, valoare) VALUES (%s, %s, %s)",
+                           (date['nume'], date['descriere'], date['valoare']))
+            conn.commit()
+            return jsonify({"status": "succes", "mesaj": "Beneficiu adaugat"}), 201
+        except Exception as e:
+            return jsonify({"status": "eroare", "detalii": str(e)}), 400
+        finally:
+            conn.close()
+
+@app.route('/api/evaluari', methods=['POST'])
+def adauga_evaluare():
+    date = request.get_json()
+    id_angajat = date.get('id_angajat')
+    s_tehnic = int(date.get('scor_tehnic'))
+    s_comunicare = int(date.get('scor_comunicare'))
+    s_leadership = int(date.get('scor_leadership'))
+
+    # LOGICA DE BUSINESS: Calculăm media scorului final în backend
+    scor_final = (s_tehnic + s_comunicare + s_leadership) / 3
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        query = """
+            INSERT INTO evaluari (id_angajat, id_evaluator, data_evaluare, 
+                                 scor_tehnic, scor_comunicare, scor_leadership, 
+                                 scor_final, feedback)
+            VALUES (%s, %s, CURDATE(), %s, %s, %s, %s, %s)
+        """
+        cursor.execute(query, (id_angajat, date['id_evaluator'], s_tehnic, 
+                               s_comunicare, s_leadership, scor_final, date.get('feedback')))
+        conn.commit()
+        return jsonify({"status": "succes", "scor_generat": round(scor_final, 2)}), 201
+    except Exception as e:
+        return jsonify({"status": "eroare", "detalii": str(e)}), 400
     finally:
         if 'conn' in locals(): conn.close()
 
