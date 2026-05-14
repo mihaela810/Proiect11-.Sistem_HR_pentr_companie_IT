@@ -850,3 +850,18 @@ CALL proc_raport_salarii_departament(NULL);
 CALL proc_raport_salarii_departament(1);
 
 SHOW PROCEDURE STATUS WHERE Db = 'my_database';
+
+CREATE TABLE IF NOT EXISTS `predictii_churn` (
+    `id_predictie`      INT(11)         NOT NULL AUTO_INCREMENT,
+    `id_angajat`        INT(11)         NOT NULL,
+    `probabilitate`     DECIMAL(5,4)    NOT NULL,
+    `nivel_risc`        ENUM('Mic','Mediu','Mare') NOT NULL,
+    `data_predictie`    DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id_predictie`),
+    UNIQUE KEY `uq_angajat` (`id_angajat`),
+    KEY `idx_nivel_risc` (`nivel_risc`),
+    FOREIGN KEY (`id_angajat`) REFERENCES `angajati`(`id_angajat`)
+        ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+SELECT * FROM `predictii_churn`;
