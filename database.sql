@@ -864,4 +864,8 @@ CREATE TABLE IF NOT EXISTS `predictii_churn` (
         ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
-SELECT * FROM `predictii_churn`;
+ALTER TABLE `predictii_churn` RENAME TO `predictii_churn_rf`;
+
+SELECT * FROM `predictii_churn_rf`;
+SELECT * FROM `predictii_churn_lr`;
+SELECT * FROM `predictii_churn_xgb`;
