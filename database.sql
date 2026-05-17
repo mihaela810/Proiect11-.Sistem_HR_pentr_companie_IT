@@ -884,3 +884,5 @@ WHERE id_utilizator = 1;
 SELECT COUNT(*) FROM angajati WHERE id_angajat > 2000;
 
 DELETE FROM angajati WHERE id_angajat > 2000;
+
+ALTER TABLE angajati AUTO_INCREMENT = 2001;
