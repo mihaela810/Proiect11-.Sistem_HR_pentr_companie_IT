@@ -869,3 +869,4 @@ ALTER TABLE `predictii_churn` RENAME TO `predictii_churn_rf`;
 SELECT * FROM `predictii_churn_rf`;
 SELECT * FROM `predictii_churn_lr`;
 SELECT * FROM `predictii_churn_xgb`;
+SELECT * FROM `angajati`;
