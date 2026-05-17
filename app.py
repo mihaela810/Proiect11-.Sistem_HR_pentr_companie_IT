@@ -4,6 +4,8 @@ from flask import request
 import re
 import mysql.connector
 from datetime import datetime
+from flask import Flask, request, jsonify
+from flask_jwt_extended import JWTManager, create_access_token
 
 app = Flask(__name__)
 CORS(app)
@@ -615,6 +617,45 @@ def adauga_evaluare():
         return jsonify({"status": "eroare", "detalii": str(e)}), 400
     finally:
         if 'conn' in locals(): conn.close()
+
+app.config["JWT_SECRET_KEY"] = "super-secret-roz-albastru"
+jwt = JWTManager(app)
+
+@app.route('/api/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    username = data.get('username')
+    password = data.get('password')
+    
+    try:
+        conn = mysql.connector.connect(
+            user='root', 
+            password='', 
+            host='127.0.0.1', 
+            database='my_database' 
+        )
+        cursor = conn.cursor()
+        
+        # APELĂM PROCEDURA EI STOCATĂ
+        cursor.callproc('proc_login', [username, password])
+        
+        # Preluăm rezultatul returnat de procedură
+        user_data = None
+        for result in cursor.stored_results():
+            user_data = result.fetchone() # Presupunem că returnează detalii utilizator dacă e corect
+            
+        cursor.close()
+        conn.close()
+        
+        if user_data:
+            # Dacă procedura a validat utilizatorul, creăm token-ul
+            token = create_access_token(identity=username)
+            return jsonify({"token": token, "success": True}), 200
+        else:
+            return jsonify({"msg": "Date incorecte (Procedura a returnat invalid)"}), 401
+            
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 print("--- RUTE DECOPERITE DE FLASK ---")
 print(app.url_map)
