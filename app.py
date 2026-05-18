@@ -359,10 +359,23 @@ def get_profil_complet(id):
         else:
             status_grila = "Peste grilă"
 
+        cursor.callproc('proc_calcul_salariu_net', [salariu])
+
+        salariu_net = None
+        # Citim rezultatul pe care îl întoarce procedura stocată
+        for result in cursor.stored_results():
+            row = result.fetchone()
+            if row:
+                salariu_net = list(row.values())[0] if isinstance(row, dict) else row[0]
+
         profil['analiza_piata'] = {
             "compa_ratio": f"{round(compa_procent, 2)}%",
-            "pozitie_grila": status_grila
+            "pozitie_grila": status_grila,
+            "salariu_net_calculat": round(float(salariu_net), 2) if salariu_net is not None else "Eroare calcul"
         }
+
+        while cursor.nextset():
+            pass
 
         # 3. Istoric Salarial
         cursor.execute("SELECT * FROM istoric_salarial WHERE id_angajat = %s ORDER BY data_modificare DESC", (id,))
@@ -795,6 +808,96 @@ def get_notificari():
         return jsonify(rezultate), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+@app.route('/api/ml/comparatie', methods=['GET'])
+def get_ml_comparatie():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT
+                rf.id_angajat,
+                rf.probabilitate  AS prob_rf,
+                lr.probabilitate  AS prob_lr,
+                xgb.probabilitate AS prob_xgb,
+                rf.nivel_risc     AS risc_rf,
+                lr.nivel_risc     AS risc_lr,
+                xgb.nivel_risc    AS risc_xgb,
+                a.salariu_curent,
+                ROUND(DATEDIFF(CURDATE(), a.data_angajare) / 365, 2) AS vechime_ani,
+                p.titlu           AS nivel_pozitie,
+                d.nume            AS departament
+            FROM predictii_churn_rf rf
+            JOIN predictii_churn_lr  lr  ON rf.id_angajat = lr.id_angajat
+            JOIN predictii_churn_xgb xgb ON rf.id_angajat = xgb.id_angajat
+            JOIN angajati a              ON rf.id_angajat = a.id_angajat
+            JOIN pozitii p               ON a.id_pozitie  = p.id_pozitie
+            JOIN departamente d          ON a.id_departament = d.id_departament
+            ORDER BY rf.probabilitate DESC
+        """)
+        date = cursor.fetchall()
+        return jsonify({"status": "succes", "date": date}), 200
+    except mysql.connector.Error as err:
+        return jsonify({"status": "eroare_db", "detalii": str(err)}), 500
+    finally:
+        if 'conn' in locals(): conn.close()
+
+
+@app.route('/api/ml/statistici', methods=['GET'])
+def get_ml_statistici():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # distributia riscului per model
+        cursor.execute("""
+            SELECT
+                'Random Forest' AS model,
+                SUM(CASE WHEN nivel_risc = 'Mare'  THEN 1 ELSE 0 END) AS mare,
+                SUM(CASE WHEN nivel_risc = 'Mediu' THEN 1 ELSE 0 END) AS mediu,
+                SUM(CASE WHEN nivel_risc = 'Mic'   THEN 1 ELSE 0 END) AS mic,
+                COUNT(*) AS total
+            FROM predictii_churn_rf
+            UNION ALL
+            SELECT
+                'Logistic Regression',
+                SUM(CASE WHEN nivel_risc = 'Mare'  THEN 1 ELSE 0 END),
+                SUM(CASE WHEN nivel_risc = 'Mediu' THEN 1 ELSE 0 END),
+                SUM(CASE WHEN nivel_risc = 'Mic'   THEN 1 ELSE 0 END),
+                COUNT(*)
+            FROM predictii_churn_lr
+            UNION ALL
+            SELECT
+                'XGBoost',
+                SUM(CASE WHEN nivel_risc = 'Mare'  THEN 1 ELSE 0 END),
+                SUM(CASE WHEN nivel_risc = 'Mediu' THEN 1 ELSE 0 END),
+                SUM(CASE WHEN nivel_risc = 'Mic'   THEN 1 ELSE 0 END),
+                COUNT(*)
+            FROM predictii_churn_xgb
+        """)
+        distributie = cursor.fetchall()
+
+        # consens intre modele
+        cursor.execute("""
+            SELECT COUNT(*) AS consens_mare
+            FROM predictii_churn_rf rf
+            JOIN predictii_churn_lr  lr  ON rf.id_angajat = lr.id_angajat
+            JOIN predictii_churn_xgb xgb ON rf.id_angajat = xgb.id_angajat
+            WHERE rf.nivel_risc = 'Mare'
+            AND   lr.nivel_risc = 'Mare'
+            AND  xgb.nivel_risc = 'Mare'
+        """)
+        consens = cursor.fetchone()
+
+        return jsonify({
+            "status":      "succes",
+            "distributie": distributie,
+            "consens_mare": consens['consens_mare']
+        }), 200
+    except mysql.connector.Error as err:
+        return jsonify({"status": "eroare_db", "detalii": str(err)}), 500
+    finally:
+        if 'conn' in locals(): conn.close()
         
 print("--- RUTE DECOPERITE DE FLASK ---")
 print(app.url_map)
