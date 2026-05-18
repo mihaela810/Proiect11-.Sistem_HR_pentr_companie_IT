@@ -870,3 +870,19 @@ SELECT * FROM `predictii_churn_rf`;
 SELECT * FROM `predictii_churn_lr`;
 SELECT * FROM `predictii_churn_xgb`;
 SELECT * FROM `angajati`;
+
+USE `my_database`;
+SELECT id_utilizator, username, rol, activ
+FROM `utilizatori`
+WHERE activ = 1
+LIMIT 5;
+
+UPDATE `utilizatori`
+SET parola_hash = 'test123'
+WHERE id_utilizator = 1;
+
+SELECT COUNT(*) FROM angajati WHERE id_angajat > 2000;
+
+DELETE FROM angajati WHERE id_angajat > 2000;
+
+ALTER TABLE angajati AUTO_INCREMENT = 2001;
