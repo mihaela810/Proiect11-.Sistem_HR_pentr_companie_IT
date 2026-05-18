@@ -882,7 +882,176 @@ SET parola_hash = 'test123'
 WHERE id_utilizator = 1;
 
 SELECT COUNT(*) FROM angajati WHERE id_angajat > 2000;
-
 DELETE FROM angajati WHERE id_angajat > 2000;
-
 ALTER TABLE angajati AUTO_INCREMENT = 2001;
+
+SELECT nume, COUNT(*) as nr
+FROM `proiecte`
+GROUP BY nume
+HAVING COUNT(*) > 1;
+
+DELETE p1 FROM `proiecte` p1
+INNER JOIN `proiecte` p2
+WHERE p1.id_proiect > p2.id_proiect
+AND p1.nume = p2.nume
+AND p1.descriere = p2.descriere;
+ALTER TABLE `proiecte` AUTO_INCREMENT = (
+  SELECT MAX(id_proiect) + 1 FROM `proiecte`
+);
+SELECT * FROM `proiecte`;
+
+UPDATE `angajati`
+SET id_departament = (
+    SELECT MIN(d2.id_departament) 
+    FROM `departamente` d2 
+    WHERE d2.nume = (SELECT d3.nume FROM `departamente` d3 WHERE d3.id_departament = angajati.id_departament)
+)
+WHERE id_departament IN (
+    SELECT d1.id_departament 
+    FROM `departamente` d1
+    JOIN `departamente` d4 ON d1.nume = d4.nume AND d1.id_departament > d4.id_departament
+);
+
+SET FOREIGN_KEY_CHECKS = 0;
+
+DELETE d1 FROM `departamente` d1
+INNER JOIN `departamente` d2 ON d1.nume = d2.nume
+WHERE d1.id_departament > d2.id_departament;
+
+SET FOREIGN_KEY_CHECKS = 1;
+
+SELECT `locatie`, COUNT(*) AS nr_departamente 
+FROM `departamente` 
+GROUP BY `locatie`
+ORDER BY nr_departamente DESC;
+
+-- Pasul 1: Oprim temporar verificările de chei străine pentru a permite editările structurale
+SET FOREIGN_KEY_CHECKS = 0;
+
+UPDATE `departamente` d
+JOIN (
+    -- Recreem puntea de legătură exact pe structura din scriptul tău inițial
+    SELECT 1 as id_vechi, 'HR' as nume, 'Bucuresti' as loc UNION ALL
+    SELECT 2, 'IT', 'Bucuresti' UNION ALL
+    SELECT 3, 'Finance', 'Bucuresti' UNION ALL
+    -- Cluj-Napoca
+    SELECT 4, 'Development', 'Cluj-Napoca' UNION ALL
+    SELECT 5, 'Testing (QA Automation)', 'Cluj-Napoca' UNION ALL
+    SELECT 6, 'DevOps & Cloud', 'Cluj-Napoca' UNION ALL
+    SELECT 7, 'Data & AI Engineering', 'Cluj-Napoca' UNION ALL
+    SELECT 8, 'Testing (Manual)', 'Cluj-Napoca' UNION ALL
+    SELECT 9, 'Business Analysis / PM', 'Cluj-Napoca' UNION ALL
+    SELECT 10, 'Human Resources', 'Cluj-Napoca' UNION ALL
+    -- Timisoara
+    SELECT 11, 'Development', 'Timisoara' UNION ALL
+    SELECT 12, 'Testing (QA Automation)', 'Timisoara' UNION ALL
+    SELECT 13, 'DevOps & Cloud', 'Timisoara' UNION ALL
+    SELECT 14, 'Data & AI Engineering', 'Timisoara' UNION ALL
+    SELECT 15, 'Testing (Manual)', 'Timisoara' UNION ALL
+    SELECT 16, 'Business Analysis / PM', 'Timisoara' UNION ALL
+    SELECT 17, 'Human Resources', 'Timisoara' UNION ALL
+    -- Brasov
+    SELECT 18, 'Development', 'Brasov' UNION ALL
+    SELECT 19, 'Testing (QA Automation)', 'Brasov' UNION ALL
+    SELECT 20, 'DevOps & Cloud', 'Brasov' UNION ALL
+    SELECT 21, 'Data & AI Engineering', 'Brasov' UNION ALL
+    SELECT 22, 'Testing (Manual)', 'Brasov' UNION ALL
+    SELECT 23, 'Business Analysis / PM', 'Brasov' UNION ALL
+    SELECT 24, 'Human Resources', 'Brasov' UNION ALL
+    -- Craiova
+    SELECT 25, 'Development', 'Craiova' UNION ALL
+    SELECT 26, 'Testing (QA Automation)', 'Craiova' UNION ALL
+    SELECT 27, 'DevOps & Cloud', 'Craiova' UNION ALL
+    SELECT 28, 'Data & AI Engineering', 'Craiova' UNION ALL
+    SELECT 29, 'Testing (Manual)', 'Craiova' UNION ALL
+    SELECT 30, 'Business Analysis / PM', 'Craiova' UNION ALL
+    SELECT 31, 'Human Resources', 'Craiova' UNION ALL
+    -- Pitesti
+    SELECT 32, 'Development', 'Pitesti' UNION ALL
+    SELECT 33, 'Testing (QA Automation)', 'Pitesti' UNION ALL
+    SELECT 34, 'DevOps & Cloud', 'Pitesti' UNION ALL
+    SELECT 35, 'Data & AI Engineering', 'Pitesti' UNION ALL
+    SELECT 36, 'Testing (Manual)', 'Pitesti' UNION ALL
+    SELECT 37, 'Business Analysis / PM', 'Pitesti' UNION ALL
+    SELECT 38, 'Human Resources', 'Pitesti' UNION ALL
+    -- Sibiu
+    SELECT 39, 'Development', 'Sibiu' UNION ALL
+    SELECT 40, 'Testing (QA Automation)', 'Sibiu' UNION ALL
+    SELECT 41, 'DevOps & Cloud', 'Sibiu' UNION ALL
+    SELECT 42, 'Data & AI Engineering', 'Sibiu' UNION ALL
+    SELECT 43, 'Testing (Manual)', 'Sibiu' UNION ALL
+    SELECT 44, 'Business Analysis / PM', 'Sibiu' UNION ALL
+    SELECT 45, 'Human Resources', 'Sibiu' UNION ALL
+    -- Suceava
+    SELECT 46, 'Development', 'Suceava' UNION ALL
+    SELECT 47, 'Testing (QA Automation)', 'Suceava' UNION ALL
+    SELECT 48, 'DevOps & Cloud', 'Suceava' UNION ALL
+    SELECT 49, 'Data & AI Engineering', 'Suceava' UNION ALL
+    SELECT 50, 'Testing (Manual)', 'Suceava' UNION ALL
+    SELECT 51, 'Business Analysis / PM', 'Suceava' UNION ALL
+    SELECT 52, 'Human Resources', 'Suceava' UNION ALL
+    -- Iasi
+    SELECT 53, 'Development', 'Iasi' UNION ALL
+    SELECT 54, 'Testing (QA Automation)', 'Iasi' UNION ALL
+    SELECT 55, 'DevOps & Cloud', 'Iasi' UNION ALL
+    SELECT 56, 'Data & AI Engineering', 'Iasi' UNION ALL
+    SELECT 57, 'Testing (Manual)', 'Iasi' UNION ALL
+    SELECT 58, 'Business Analysis / PM', 'Iasi' UNION ALL
+    SELECT 59, 'Human Resources', 'Iasi'
+) map ON d.`nume` = map.nume AND d.`locatie` = map.loc
+JOIN `manageri` m ON m.`id_departament` = map.id_vechi
+SET d.`id_manager` = m.`id_angajat`;
+SET FOREIGN_KEY_CHECKS = 1;
+SELECT * FROM `departamente`;
+SELECT * FROM `pozitii`;
+
+
+
+-- adauga coloana id_departament
+ALTER TABLE `pozitii`
+ADD COLUMN id_departament INT NULL AFTER nivel;
+
+-- adauga cheia straina catre departamente
+ALTER TABLE `pozitii`
+ADD CONSTRAINT fk_pozitii_departamente
+FOREIGN KEY (id_departament)
+REFERENCES `departamente`(id_departament)
+ON DELETE SET NULL;
+DESCRIBE `pozitii`;
+ALTER TABLE `pozitii` 
+DROP COLUMN `id_departament`;
+
+ALTER TABLE `pozitii` DROP FOREIGN KEY `fk_pozitii_departamente`;
+SELECT * FROM `pozitii`;
+
+SELECT `titlu`, COUNT(*) AS nr_pozitii 
+FROM `pozitii` 
+GROUP BY `titlu`
+ORDER BY nr_pozitii DESC;
+
+-- 1. Oprim verificările cheilor străine ca să evitam erorile de legătură
+SET FOREIGN_KEY_CHECKS = 0;
+
+-- 2. Ștergem duplicatele păstrând doar poziția cu cel mai mic ID pentru fiecare combinație
+DELETE p1 FROM `pozitii` p1
+INNER JOIN `pozitii` p2 ON p1.`titlu` = p2.`titlu` AND p1.`nivel` = p2.`nivel`
+WHERE p1.`id_pozitie` > p2.`id_pozitie`;
+
+-- 3. Resetăm contorul AUTO_INCREMENT ca următoarea poziție adăugată să ia ID-ul corect
+ALTER TABLE `pozitii` AUTO_INCREMENT = 1;
+
+-- 4. Pornim înapoi verificările sistemului
+SET FOREIGN_KEY_CHECKS = 1;
+
+SELECT * FROM `beneficii`;
+
+SELECT * FROM `beneficii_angajati`;
+
+SELECT `nume`, COUNT(*) AS nr_nume
+FROM `beneficii` 
+GROUP BY `nume`
+ORDER BY nr_nume DESC;
+
+DELETE p1 FROM `beneficii` p1
+INNER JOIN `beneficii` p2 ON p1.`nume` = p2.`nume` AND p1.`descriere` = p2.`descriere`
+WHERE p1.`id_beneficiu` > p2.`id_beneficiu`;
