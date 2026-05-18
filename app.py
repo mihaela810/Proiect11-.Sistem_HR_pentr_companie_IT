@@ -5,10 +5,12 @@ import re
 import mysql.connector
 from datetime import datetime
 from flask import Flask, request, jsonify
-from flask_jwt_extended import JWTManager, create_access_token
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 
 app = Flask(__name__)
 CORS(app)
+app.config["JWT_SECRET_KEY"] = "super-secret-roz-albastru"
+jwt = JWTManager(app)
 regex_email = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
 
 db_config = {
@@ -210,6 +212,38 @@ def get_stats():
             cursor.close()
             conn.close()
 
+@app.route('/api/angajati/arhiva', methods=['GET'])
+def get_arhiva_angajati():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        query = """
+            SELECT 
+                a.*, 
+                d.nume AS nume_departament, 
+                p.titlu AS titlu_pozitie
+            FROM angajati a
+            LEFT JOIN departamente d ON a.id_departament = d.id_departament
+            LEFT JOIN pozitii p ON a.id_pozitie = p.id_pozitie
+            WHERE a.status = 'inactiv'
+            ORDER BY a.nume ASC
+        """
+        
+        cursor.execute(query)
+        arhiva = cursor.fetchall()
+        
+        return jsonify({
+            "status": "succes",
+            "numar_fosti_angajati": len(arhiva),
+            "date": arhiva
+        }), 200
+    except mysql.connector.Error as err:
+        return jsonify({"status": "eroare_db", "detalii": str(err)}), 500
+    finally:
+        if 'conn' in locals(): conn.close()
+
+
 @app.route('/api/angajati/<int:id>', methods=['PUT'])
 def actualizeaza_angajat(id):
     date_update = request.get_json()
@@ -291,45 +325,13 @@ def sterge_angajat(id):
     finally:
         if 'conn' in locals(): conn.close()
 
-@app.route('/api/angajati/arhiva', methods=['GET'])
-def get_arhiva_angajati():
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
-        
-        query = """
-            SELECT 
-                a.*, 
-                d.nume AS nume_departament, 
-                p.titlu AS titlu_pozitie
-            FROM angajati a
-            LEFT JOIN departamente d ON a.id_departament = d.id_departament
-            LEFT JOIN pozitii p ON a.id_pozitie = p.id_pozitie
-            WHERE a.status = 'inactiv'
-            ORDER BY a.nume ASC
-        """
-        
-        cursor.execute(query)
-        arhiva = cursor.fetchall()
-        
-        return jsonify({
-            "status": "succes",
-            "numar_fosti_angajati": len(arhiva),
-            "date": arhiva
-        }), 200
-
-    except mysql.connector.Error as err:
-        return jsonify({"status": "eroare_db", "detalii": str(err)}), 500
-    finally:
-        if 'conn' in locals(): conn.close()
-
 @app.route('/api/angajati/profil/<int:id>', methods=['GET'])
 def get_profil_complet(id):
     try:
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
         
-        # date din baza
+        # 1. Date de bază angajat & grila lui salarială
         query_base = """
             SELECT a.*, d.nume as departament, p.titlu as functie, 
                    p.salariu_min, p.salariu_max
@@ -344,23 +346,33 @@ def get_profil_complet(id):
         if not profil:
             return jsonify({"status": "eroare", "mesaj": "Angajat negasit"}), 404
 
-        # Analiza salariala rapida pentru profil
+        # 2. Analiza salarială completă (Aliniată la cerințele de Churn ale colegei)
         salariu = float(profil['salariu_curent'])
         medie = (float(profil['salariu_min']) + float(profil['salariu_max'])) / 2
+        compa_procent = (salariu / medie) * 100
+        
+        # Pragurile oficiale de churn solicitate
+        if compa_procent < 80:
+            status_grila = "Subdeplătit (Risc churn mare)"
+        elif 80 <= compa_procent <= 120:
+            status_grila = "În grilă"
+        else:
+            status_grila = "Peste grilă"
+
         profil['analiza_piata'] = {
-            "compa_ratio": f"{round((salariu / medie) * 100, 2)}%",
-            "pozitie_grila": "Sub medie" if salariu < medie else "Peste medie"
+            "compa_ratio": f"{round(compa_procent, 2)}%",
+            "pozitie_grila": status_grila
         }
 
-        # Istoric Salarial
+        # 3. Istoric Salarial
         cursor.execute("SELECT * FROM istoric_salarial WHERE id_angajat = %s ORDER BY data_modificare DESC", (id,))
         profil['istoric_salarii'] = cursor.fetchall()
 
-        # Evaluări
-        cursor.execute("SELECT * FROM evaluari WHERE id_angajat = %s ORDER BY data_evaluare DESC", (id,))
+        # 4. Evaluări (Aici aducem noile scoruri: tehnic, comunicare, leadership, final)
+        cursor.execute("SELECT id_evaluare, id_evaluator, data_evaluare, scor_tehnic, scor_comunicare, scor_leadership, scor_final, feedback FROM evaluari WHERE id_angajat = %s ORDER BY data_evaluare DESC", (id,))
         profil['evaluari'] = cursor.fetchall()
 
-        # Proiecte Active
+        # 5. Proiecte Active
         query_proiecte = """
             SELECT DISTINCT p.nume, ap.rol_proiect, ap.ore_alocate
             FROM alocari_proiecte ap
@@ -618,9 +630,6 @@ def adauga_evaluare():
     finally:
         if 'conn' in locals(): conn.close()
 
-app.config["JWT_SECRET_KEY"] = "super-secret-roz-albastru"
-jwt = JWTManager(app)
-
 @app.route('/api/login', methods=['POST'])
 def login():
     data = request.get_json()
@@ -648,15 +657,145 @@ def login():
         conn.close()
         
         if user_data:
-            # Dacă procedura a validat utilizatorul, creăm token-ul
-            token = create_access_token(identity=username)
-            return jsonify({"token": token, "success": True}), 200
+            id_utilizator = user_data[0]
+            username_db = user_data[1]
+            rol_utilizator = user_data[2]
+            
+            # Forțăm ID-ul să fie text (string) pentru a evita eroarea JWT
+            identity_str = str(id_utilizator)
+            
+            # Generăm token-ul folosind string-ul ca identitate principală
+            # și trimitem restul detaliilor ca claims suplimentare
+            token = create_access_token(
+                identity=identity_str, 
+                additional_claims={"username": username_db, "rol": rol_utilizator}
+            )
+            
+            return jsonify({
+                "token": token, 
+                "success": True, 
+                "rol": rol_utilizator,
+                "username": username_db
+            }), 200
         else:
-            return jsonify({"msg": "Date incorecte (Procedura a returnat invalid)"}), 401
+            return jsonify({"msg": "Date de logare incorecte sau cont inactiv"}), 401
             
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/evaluari', methods=['GET'])
+@jwt_required()
+def get_evaluari():
+    # Acum current_user este direct string-ul cu ID-ul (ex: "1")
+    id_utilizator = get_jwt_identity() 
+    
+    try:
+        conn = mysql.connector.connect(
+            user='root', password='', host='127.0.0.1', database='my_database'
+        )
+        cursor = conn.cursor(dictionary=True)
+        
+        # Interogăm tabelul folosind ID-ul primit
+        query = """
+            SELECT data_evaluare, scor_tehnic, scor_comunicare, scor_leadership, scor_final, feedback
+            FROM evaluari 
+            WHERE id_angajat = %s 
+            ORDER BY data_evaluare DESC
+        """
+        cursor.execute(query, (id_utilizator,))
+        rezultate = cursor.fetchall()
+        
+        cursor.close()
+        conn.close()
+        return jsonify(rezultate), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+@app.route('/api/manageri', methods=['GET'])
+@jwt_required()
+def get_manageri():
+    id_utilizator = get_jwt_identity()
+    
+    try:
+        conn = mysql.connector.connect(
+            user='root', password='', host='127.0.0.1', database='my_database'
+        )
+        cursor = conn.cursor(dictionary=True)
+        
+        # Aflăm cine este managerul angajatului curent făcând JOIN între angajați și manageri
+        query = """
+            SELECT m.id_manager, a2.nume AS nume_manager, a2.prenume AS prenume_manager
+            FROM angajati a1
+            JOIN manageri m ON a1.id_manager = m.id_manager
+            JOIN angajati a2 ON m.id_angajat = a2.id_angajat
+            WHERE a1.id_angajat = %s
+        """
+        cursor.execute(query, (id_utilizator,))
+        manager_data = cursor.fetchone()
+        
+        cursor.close()
+        conn.close()
+        
+        if manager_data:
+            return jsonify(manager_data), 200
+        return jsonify({"msg": "Nu s-a găsit un manager asociat"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/istoric-salarial', methods=['GET'])
+@jwt_required()
+def get_istoric_salarial():
+    id_utilizator = get_jwt_identity()
+    
+    try:
+        conn = mysql.connector.connect(
+            user='root', password='', host='127.0.0.1', database='my_database'
+        )
+        cursor = conn.cursor(dictionary=True)
+        
+        # Preluăm toate modificările salariale
+        query = """
+            SELECT data_modificare, salariu_vechi, salariu_nou, motiv
+            FROM istoric_salarial 
+            WHERE id_angajat = %s 
+            ORDER BY data_modificare DESC
+        """
+        cursor.execute(query, (id_utilizator,))
+        rezultate = cursor.fetchall()
+        
+        cursor.close()
+        conn.close()
+        return jsonify(rezultate), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+@app.route('/api/notificari', methods=['GET'])
+@jwt_required()
+def get_notificari():
+    id_utilizator = get_jwt_identity()
+    
+    try:
+        conn = mysql.connector.connect(
+            user='root', password='', host='127.0.0.1', database='my_database'
+        )
+        cursor = conn.cursor(dictionary=True)
+        
+        # Preluăm notificările active pentru utilizatorul logat
+        query = """
+            SELECT id_notificare, mesaj, data_creare, citita 
+            FROM notificari 
+            WHERE id_angajat = %s 
+            ORDER BY data_creare DESC
+        """
+        cursor.execute(query, (id_utilizator,))
+        rezultate = cursor.fetchall()
+        
+        cursor.close()
+        conn.close()
+        return jsonify(rezultate), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+        
 print("--- RUTE DECOPERITE DE FLASK ---")
 print(app.url_map)
 print("--------------------------------")
