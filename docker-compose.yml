@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+
+  db:
+    image: mariadb:10.11
+    container_name: hr_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ''
+      MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+      MYSQL_DATABASE: my_database
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./Database/my_database.sql:/docker-entrypoint-initdb.d/01_schema.sql
+      - ./Database/security.sql:/docker-entrypoint-initdb.d/02_security.sql
+      - ./Database/populate_hr.sql:/docker-entrypoint-initdb.d/03_populate.sql
+
+  adminer:
+    image: adminer
+    container_name: hr_adminer
+    restart: always
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+
+  backend:
+    build: ./Backend
+    container_name: hr_backend
+    restart: always
+    ports:
+      - "5001:5001"
+    depends_on:
+      - db
+    environment:
+      DB_HOST: db
+      DB_USER: root
+      DB_PASSWORD: ''
+      DB_NAME: my_database
+
+  frontend:
+    build: ./Frontend
+    container_name: hr_frontend
+    restart: always
+    ports:
+      - "3001:3001"
+    depends_on:
+      - backend
+    environment:
+      HOST: 0.0.0.0
+      PORT: '3001'
+      CHOKIDAR_USEPOLLING: 'true'
+      WDS_SOCKET_PORT: '0'
+      REACT_APP_API_URL: http://localhost:5001/api
+
+volumes:
+  db_data:
