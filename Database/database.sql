@@ -871,6 +871,8 @@ SELECT * FROM `predictii_churn_lr`;
 SELECT * FROM `predictii_churn_xgb`;
 SELECT * FROM `angajati`;
 
+
+
 USE `my_database`;
 SELECT id_utilizator, username, rol, activ
 FROM `utilizatori`
@@ -1055,3 +1057,17 @@ ORDER BY nr_nume DESC;
 DELETE p1 FROM `beneficii` p1
 INNER JOIN `beneficii` p2 ON p1.`nume` = p2.`nume` AND p1.`descriere` = p2.`descriere`
 WHERE p1.`id_beneficiu` > p2.`id_beneficiu`;
+
+USE `my_database`;
+-- 1. Modificăm primul utilizator din tabel să aibă o parolă simplă pe care o știm: "parola123"
+-- (Folosim hash-ul gata criptat pentru textul "parola123")
+UPDATE `utilizatori` 
+SET `parola_hash` = '$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31tK'
+WHERE `activ` = 1
+LIMIT 1;
+
+-- 2. Afișăm exact ce username are acest utilizator ca să îl poți copia
+SELECT `username`, 'parola123' AS `parola_valabila` 
+FROM `utilizatori` 
+WHERE `parola_hash` = '$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31tK'
+LIMIT 1;
