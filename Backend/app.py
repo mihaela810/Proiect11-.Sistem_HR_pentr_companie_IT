@@ -465,6 +465,240 @@ def acorda_marire():
     finally:
         if 'conn' in locals(): conn.close()
 
+from flask_jwt_extended import jwt_required, get_jwt_identity
+
+@app.route('/api/angajati/<int:id_angajat>', methods=['PUT'])
+@jwt_required()
+def editeaza_angajat(id_angajat):
+    try:
+        data = request.get_json()
+        current_username = get_jwt_identity()
+        
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # 1. Verificăm mai întâi rolul utilizatorului care face cererea
+        cursor.execute("SELECT rol FROM utilizatori WHERE username = %s", (current_username,))
+        user_cont = cursor.fetchone()
+        
+        if not user_cont:
+            cursor.execute("SELECT rol FROM utilizatori WHERE id_utilizator = %s", (current_username,))
+            user_cont = cursor.fetchone()
+
+        # 2. Dacă este doar 'user', aplicăm restricțiile
+        if user_cont and user_cont['rol'] == 'user':
+            campuri_interzise = ['salariu', 'data_angajare', 'id_departament', 'pozitie', 'rol_proiect']
+            for camp in campuri_interzise:
+                if camp in data:
+                    return jsonify({
+                        "status": "eroare_securitate",
+                        "mesaj": f"Nu aveti permisiunea de a modifica campul sensibil: {camp}."
+                    }), 403
+
+        return jsonify({"status": "succes", "mesaj": "Datele au fost actualizate."}), 200
+
+    except mysql.connector.Error as err:
+        return jsonify({"status": "eroare_db", "detalii": str(err)}), 500
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
+
+@app.route('/api/angajati/filtrare', methods=['GET'])
+def get_angajati_filtrati():
+    try:
+        # Preluăm parametrii trimiși din React URL 
+        departament = request.args.get('departament')
+        pozitie = request.args.get('pozitie')
+        status_activ = request.args.get('activ') 
+        sortare = request.args.get('sortare', 'nume_asc')
+        
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Construim query-ul dinamic
+        query = "SELECT * FROM angajati WHERE 1=1"
+        params = []
+        
+        if departament:
+            query += " AND id_departament = %s"
+            params.append(departament)
+        if pozitie:
+            query += " AND pozitie LIKE %s"
+            params.append(f"%{pozitie}%")
+        if status_activ is not None:
+            query += " AND activ = %s"
+            params.append(int(status_activ))
+            
+        # Aplicăm sortarea cerută
+        if sortare == 'nume_asc':
+            query += " ORDER BY nume ASC, prenume ASC"
+        elif sortare == 'nume_desc':
+            query += " ORDER BY nume DESC, prenume DESC"
+        elif sortare == 'departament':
+            query += " ORDER BY id_departament ASC"
+        elif sortare == 'pozitie':
+            query += " ORDER BY pozitie ASC"
+            
+        cursor.execute(query, tuple(params))
+        rezultate = cursor.fetchall()
+        
+        return jsonify({"status": "succes", "total": len(rezultate), "angajati": rezultate}), 200
+    except mysql.connector.Error as err:
+        return jsonify({"status": "eroare_db", "detalii": str(err)}), 500
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
+
+@app.route('/api/concedii/istoric-grupare', methods=['GET'])
+def get_istoric_concedii_avansat():
+    try:
+        id_angajat = request.args.get('id_angajat')
+        id_departament = request.args.get('id_departament')
+        id_manager = request.args.get('id_manager')
+        
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        query = """
+            SELECT c.*, a.nume, a.prenume, a.id_departament, c.id_aprobator
+            FROM concedii c
+            JOIN angajati a ON c.id_angajat = a.id_angajat
+            WHERE 1=1
+        """
+        params = []
+        
+        if id_angajat:
+            query += " AND c.id_angajat = %s"
+            params.append(id_angajat)
+        if id_departament:
+            query += " AND a.id_departament = %s"
+            params.append(id_departament)
+        if id_manager:
+            query += " AND c.id_aprobator = %s"
+            params.append(id_manager)
+            
+        query += " ORDER BY c.data_start DESC"
+        
+        cursor.execute(query, tuple(params))
+        istoric = cursor.fetchall()
+        return jsonify({"status": "succes", "date_concedii": istoric}), 200
+    except mysql.connector.Error as err:
+        return jsonify({"status": "eroare_db", "detalii": str(err)}), 500
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
+
+@app.route('/api/departamente/sinteza', methods=['GET'])
+def get_sinteza_departamente():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # 1. Extragem departamentele cu numărul total de angajați alocați
+        query_departamente = """
+            SELECT d.id_departament, d.nume AS nume_departament, COUNT(a.id_angajat) AS numar_angajati
+            FROM departamente d
+            LEFT JOIN angajati a ON d.id_departament = a.id_departament
+            GROUP BY d.id_departament
+        """
+        cursor.execute(query_departamente)
+        departamente = cursor.fetchall()
+        
+        # 2. Pentru fiecare departament, atașăm detaliile reale ale angajatiilor
+        for dep in departamente:
+            query_angajati = """
+                SELECT id_angajat, nume, prenume, id_pozitie, status 
+                FROM angajati 
+                WHERE id_departament = %s
+            """
+            cursor.execute(query_angajati, (dep['id_departament'],))
+            angajati = cursor.fetchall()
+            
+            dep['detalii_angajati'] = angajati
+            
+            # Extragem ID-urile unice de poziții active în acest departament
+            pozitii_unice = list(set([ang['id_pozitie'] for ang in angajati if ang['id_pozitie']]))
+            dep['id_pozitii_existente'] = pozitii_unice
+            
+            # Calculăm rapid câți angajați sunt activi în departament
+            angajati_activi = len([ang for ang in angajati if ang['status'] == 'activ'])
+            dep['numar_angajati_activi'] = angajati_activi
+            
+        return jsonify({
+            "status": "succes", 
+            "total_departamente": len(departamente),
+            "departamente": departamente
+        }), 200
+
+    except mysql.connector.Error as err:
+        return jsonify({"status": "eroare_db", "detalii": str(err)}), 500
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
+
+@app.route('/api/beneficii/statistici', methods=['GET'])
+def get_beneficii_cu_statistici():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Numărăm câți oameni unici au primit fiecare beneficiu în parte
+        query = """
+            SELECT b.id_beneficiu, b.nume, b.descriere, b.valoare, COUNT(ba.id_angajat) AS total_angajati_beneficiari
+            FROM beneficii b
+            LEFT JOIN beneficii_angajati ba ON b.id_beneficiu = ba.id_beneficiu
+            GROUP BY b.id_beneficiu
+        """
+        cursor.execute(query)
+        statistici = cursor.fetchall()
+        return jsonify({"status": "succes", "beneficii": statistici}), 200
+    except mysql.connector.Error as err:
+        return jsonify({"status": "eroare_db", "detalii": str(err)}), 500
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
+
+@app.route('/api/beneficii/acorda', methods=['POST'])
+@jwt_required()
+def acorda_beneficiu_angajat():
+    try:
+        current_username = get_jwt_identity()
+        data = request.get_json()
+        
+        id_angajat = data.get('id_angajat')
+        id_beneficiu = data.get('id_beneficiu')
+        data_acordare = data.get('data_acordare', '2026-05-19') # Data curentă 2026 implicită
+        
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Verificare drepturi: Doar Admin sau Manager au voie!
+        cursor.execute("SELECT rol FROM utilizatori WHERE username = %s OR id_utilizator = %s", (current_username, current_username))
+        user_cont = cursor.fetchone()
+        
+        if user_cont and user_cont['rol'] == 'user':
+            return jsonify({"status": "eroare_privilegii", "mesaj": "Utilizatorii simpli nu pot crea sau acorda beneficii!"}), 403
+            
+        if not id_angajat or not id_beneficiu:
+            return jsonify({"status": "eroare", "mesaj": "Lipsesc id_angajat sau id_beneficiu."}), 400
+            
+        query = "INSERT INTO beneficii_angajati (id_angajat, id_beneficiu, data_acordare) VALUES (%s, %s, %s)"
+        cursor.execute(query, (id_angajat, id_beneficiu, data_acordare))
+        conn.commit()
+        
+        return jsonify({"status": "succes", "mesaj": "Beneficiul a fost alocat cu succes angajatului!"}), 201
+    except mysql.connector.Error as err:
+        return jsonify({"status": "eroare_db", "detalii": str(err)}), 500
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
+
 @app.route('/api/hr/angajati-view', methods=['GET'])
 def get_angajati_hr_view():
     try:
@@ -1041,9 +1275,10 @@ def login():
         conn = mysql.connector.connect(
             user='root', 
             password='', 
-            host=os.environ.get('DB_HOST', '127.0.0.1'), 
+            host=os.environ.get('DB_HOST', '127.0.0.1'),
             database='my_database' 
         )
+
         cursor = conn.cursor()
         
         cursor.callproc('proc_login', [username, password])
@@ -1519,209 +1754,6 @@ def sterge_alocare_proiect(id_alocare):
             cursor.close()
             conn.close()
 
-@app.route('/api/evaluari', methods=['GET'])
-@jwt_required()
-def get_evaluari():
-    # Acum current_user este direct string-ul cu ID respectiv
-    id_utilizator = get_jwt_identity() 
-    
-    try:
-        conn = mysql.connector.connect(
-            user='root', password='', host='127.0.0.1', database='my_database'
-        )
-        cursor = conn.cursor(dictionary=True)
-        
-        # Interogăm tabelul folosind ID-ul primit
-        query = """
-            SELECT data_evaluare, scor_tehnic, scor_comunicare, scor_leadership, scor_final, feedback
-            FROM evaluari 
-            WHERE id_angajat = %s 
-            ORDER BY data_evaluare DESC
-        """
-        cursor.execute(query, (id_utilizator,))
-        rezultate = cursor.fetchall()
-        
-        cursor.close()
-        conn.close()
-        return jsonify(rezultate), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    
-@app.route('/api/manageri', methods=['GET'])
-@jwt_required()
-def get_manageri():
-    id_utilizator = get_jwt_identity()
-    
-    try:
-        conn = mysql.connector.connect(
-            user='root', password='', host='127.0.0.1', database='my_database'
-        )
-        cursor = conn.cursor(dictionary=True)
-        
-        # Aflăm cine este managerul angajatului curent
-        query = """
-            SELECT m.id_manager, a2.nume AS nume_manager, a2.prenume AS prenume_manager
-            FROM angajati a1
-            JOIN manageri m ON a1.id_manager = m.id_manager
-            JOIN angajati a2 ON m.id_angajat = a2.id_angajat
-            WHERE a1.id_angajat = %s
-        """
-        cursor.execute(query, (id_utilizator,))
-        manager_data = cursor.fetchone()
-        
-        cursor.close()
-        conn.close()
-        
-        if manager_data:
-            return jsonify(manager_data), 200
-        return jsonify({"msg": "Nu s-a găsit un manager asociat"}), 404
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/api/istoric-salarial', methods=['GET'])
-@jwt_required()
-def get_istoric_salarial():
-    id_utilizator = get_jwt_identity()
-    
-    try:
-        conn = mysql.connector.connect(
-            user='root', password='', host='127.0.0.1', database='my_database'
-        )
-        cursor = conn.cursor(dictionary=True)
-        
-        # Preluăm toate modificările salariale
-        query = """
-            SELECT data_modificare, salariu_vechi, salariu_nou, motiv
-            FROM istoric_salarial 
-            WHERE id_angajat = %s 
-            ORDER BY data_modificare DESC
-        """
-        cursor.execute(query, (id_utilizator,))
-        rezultate = cursor.fetchall()
-        
-        cursor.close()
-        conn.close()
-        return jsonify(rezultate), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    
-@app.route('/api/notificari', methods=['GET'])
-@jwt_required()
-def get_notificari():
-    id_utilizator = get_jwt_identity()
-    
-    try:
-        conn = mysql.connector.connect(
-            user='root', password='', host='127.0.0.1', database='my_database'
-        )
-        cursor = conn.cursor(dictionary=True)
-        
-        # Preluăm notificările active pentru utilizatorul logat
-        query = """
-            SELECT id_notificare, mesaj, data_creare, citita 
-            FROM notificari 
-            WHERE id_angajat = %s 
-            ORDER BY data_creare DESC
-        """
-        cursor.execute(query, (id_utilizator,))
-        rezultate = cursor.fetchall()
-        
-        cursor.close()
-        conn.close()
-        return jsonify(rezultate), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    
-@app.route('/api/ml/comparatie', methods=['GET'])
-def get_ml_comparatie():
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("""
-            SELECT
-                rf.id_angajat,
-                rf.probabilitate  AS prob_rf,
-                lr.probabilitate  AS prob_lr,
-                xgb.probabilitate AS prob_xgb,
-                rf.nivel_risc     AS risc_rf,
-                lr.nivel_risc     AS risc_lr,
-                xgb.nivel_risc    AS risc_xgb,
-                a.salariu_curent,
-                ROUND(DATEDIFF(CURDATE(), a.data_angajare) / 365, 2) AS vechime_ani,
-                p.titlu           AS nivel_pozitie,
-                d.nume            AS departament
-            FROM predictii_churn_rf rf
-            JOIN predictii_churn_lr  lr  ON rf.id_angajat = lr.id_angajat
-            JOIN predictii_churn_xgb xgb ON rf.id_angajat = xgb.id_angajat
-            JOIN angajati a              ON rf.id_angajat = a.id_angajat
-            JOIN pozitii p               ON a.id_pozitie  = p.id_pozitie
-            JOIN departamente d          ON a.id_departament = d.id_departament
-            ORDER BY rf.probabilitate DESC
-        """)
-        date = cursor.fetchall()
-        return jsonify({"status": "succes", "date": date}), 200
-    except mysql.connector.Error as err:
-        return jsonify({"status": "eroare_db", "detalii": str(err)}), 500
-    finally:
-        if 'conn' in locals(): conn.close()
-
-
-@app.route('/api/ml/statistici', methods=['GET'])
-def get_ml_statistici():
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
-
-        # distributia riscului per model
-        cursor.execute("""
-            SELECT
-                'Random Forest' AS model,
-                SUM(CASE WHEN nivel_risc = 'Mare'  THEN 1 ELSE 0 END) AS mare,
-                SUM(CASE WHEN nivel_risc = 'Mediu' THEN 1 ELSE 0 END) AS mediu,
-                SUM(CASE WHEN nivel_risc = 'Mic'   THEN 1 ELSE 0 END) AS mic,
-                COUNT(*) AS total
-            FROM predictii_churn_rf
-            UNION ALL
-            SELECT
-                'Logistic Regression',
-                SUM(CASE WHEN nivel_risc = 'Mare'  THEN 1 ELSE 0 END),
-                SUM(CASE WHEN nivel_risc = 'Mediu' THEN 1 ELSE 0 END),
-                SUM(CASE WHEN nivel_risc = 'Mic'   THEN 1 ELSE 0 END),
-                COUNT(*)
-            FROM predictii_churn_lr
-            UNION ALL
-            SELECT
-                'XGBoost',
-                SUM(CASE WHEN nivel_risc = 'Mare'  THEN 1 ELSE 0 END),
-                SUM(CASE WHEN nivel_risc = 'Mediu' THEN 1 ELSE 0 END),
-                SUM(CASE WHEN nivel_risc = 'Mic'   THEN 1 ELSE 0 END),
-                COUNT(*)
-            FROM predictii_churn_xgb
-        """)
-        distributie = cursor.fetchall()
-
-        # consens intre modele
-        cursor.execute("""
-            SELECT COUNT(*) AS consens_mare
-            FROM predictii_churn_rf rf
-            JOIN predictii_churn_lr  lr  ON rf.id_angajat = lr.id_angajat
-            JOIN predictii_churn_xgb xgb ON rf.id_angajat = xgb.id_angajat
-            WHERE rf.nivel_risc = 'Mare'
-            AND   lr.nivel_risc = 'Mare'
-            AND  xgb.nivel_risc = 'Mare'
-        """)
-        consens = cursor.fetchone()
-
-        return jsonify({
-            "status":      "succes",
-            "distributie": distributie,
-            "consens_mare": consens['consens_mare']
-        }), 200
-    except mysql.connector.Error as err:
-        return jsonify({"status": "eroare_db", "detalii": str(err)}), 500
-    finally:
-        if 'conn' in locals(): conn.close()
-        
 print("--- RUTE DECOPERITE DE FLASK ---")
 print(app.url_map)
 print("--------------------------------")
