@@ -44,39 +44,36 @@ export default function ProiectePage() {
 
   const handleSubmit = async (e) => {
   e.preventDefault();
-  setErori([]);
+  setErori([]); // CORECT: Curăță array-ul de erori existent fără să-l redeclare!
   setSucces('');
 
-  // Validare frontend: bugetul trebuie să fie un număr valid și pozitiv
+  // 1. Validare și conversie Buget
   const bugetNumeric = parseFloat(form.buget);
   if (isNaN(bugetNumeric) || bugetNumeric <= 0) {
     setErori(['Bugetul trebuie să fie un număr pozitiv valid!']);
     return;
   }
 
-  // Validare frontend: data de sfârșit nu poate fi înainte de data de start
+  // 2. Validare logică pentru date
   if (form.data_sfarsit && new Date(form.data_start) > new Date(form.data_sfarsit)) {
     setErori(['Data de sfârșit nu poate fi anterioară datei de start!']);
     return;
   }
 
-  // CORECTIE CRITICĂ: Sanitizăm datele pentru app.py și MySQL
+  // 3. Construire obiect curat (Trimitere NULL în loc de string gol pentru MySQL)
   const dateProiect = {
     nume: form.nume.trim(),
-    descriere: form.descriere.trim(),
+    descriere: form.descriere ? form.descriere.trim() : null,
     data_start: form.data_start,
-    // Dacă data_sfarsit e goală, trimitem null pentru a nu crăpa coloana de tip DATE din SQL
-    data_sfarsit: form.data_sfarsit ? form.data_sfarsit : null,
+    data_sfarsit: form.data_sfarsit && form.data_sfarsit.trim() !== '' ? form.data_sfarsit : null,
     status: form.status,
-    buget: bugetNumeric // Trimis obligatoriu ca Float/Number
+    buget: bugetNumeric
   };
 
   try {
-    // Apelăm endpoint-ul configurat în rutele tale globale
     await api.post(API.PROIECTE, dateProiect);
-    
     setSucces('Proiectul a fost creat cu succes!');
-    // Resetăm formularul la valorile de bază
+    
     setForm({
       nume: '',
       descriere: '',
@@ -85,14 +82,14 @@ export default function ProiectePage() {
       status: 'planificat',
       buget: '',
     });
+    
     setShowForm(false);
-    fetchProiecte(); // Reîncărcăm lista actualizată din baza de date
-    } catch (err) {
-    // Extragem eroarea specifică aruncată de backend-ul tău din Flask
-      const mesajEroare = err.response?.data?.detalii || 'Eroare la salvarea proiectului. Asigură-te că datele sunt corecte.';
-      setErori([mesajEroare]);
-    }
-  };
+    fetchProiecte();
+  } catch (err) {
+    const mesajEroare = err.response?.data?.detalii || 'Eroare la salvarea proiectului.';
+    setErori([mesajEroare]);
+  }
+};
 
   const formatRON  = (v) => v ? `${Number(v).toLocaleString('ro-RO')} RON` : '—';
   const formatData = (d) => d ? new Date(d).toLocaleDateString('ro-RO') : '—';

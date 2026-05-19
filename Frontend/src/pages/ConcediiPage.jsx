@@ -31,15 +31,31 @@ export default function ConcediiPage() {
 
   useEffect(() => {
     fetchConcedii();
-    api.get(API.ANGAJATI).then(res => setAngajati(res.data));
+    // Securizăm preluarea angajaților în caz că backend-ul returnează alt format
+    api.get(API.ANGAJATI)
+      .then(res => {
+        if (Array.isArray(res.data)) {
+          setAngajati(res.data);
+        } else if (res.data && Array.isArray(res.data.date)) {
+          setAngajati(res.data.date);
+        }
+      })
+      .catch(() => console.error("Nu s-au putut incarca angajatii pentru dropdown."));
   }, []);
 
   const fetchConcedii = () => {
     setLoading(true);
-    // folosim endpoint-ul de angajati si afisam concediile din profil
-    // pentru o lista completa ar trebui un endpoint dedicat GET /api/concedii
-    // momentan simulam cu date din angajati
-    setLoading(false);
+    api.get(API.CONCEDII)
+      .then(res => {
+        // Ne asigurăm că setăm un array valid
+        if (Array.isArray(res.data)) {
+          setConcedii(res.data);
+        } else {
+          setConcedii([]);
+        }
+      })
+      .catch(() => setErori(['Nu s-au putut incarca concediile.']))
+      .finally(() => setLoading(false));
   };
 
   const handleChange = (e) => {
@@ -47,217 +63,201 @@ export default function ConcediiPage() {
   };
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
-  setErori([]);
-  setSucces('');
+    e.preventDefault();
+    setErori([]);
+    setSucces('');
 
-  // Corecție: parsăm ID-urile în numere întregi înainte de a le expedia în Flask
-  const dateConcediu = {
-    ...form,
-    id_angajat: parseInt(form.id_angajat, 10),
-    id_aprobator: parseInt(form.id_aprobator, 10)
+    if (!form.id_angajat) {
+      setErori(['Te rugam sa selectezi un angajat!']);
+      return;
+    }
+
+    if (new Date(form.data_start) > new Date(form.data_sfarsit)) {
+      setErori(['Data de inceput nu poate fi dupa data de sfarsit!']);
+      return;
+    }
+
+    // Convertim ID-urile în numere int pentru a corespunde cu app.py/MySQL
+    const dateTrimise = {
+      id_angajat: parseInt(form.id_angajat, 10),
+      tip: form.tip,
+      data_start: form.data_start,
+      data_sfarsit: form.data_sfarsit,
+      id_aprobator: parseInt(form.id_aprobator, 10)
+    };
+
+    try {
+      await api.post(API.CONCEDII, dateTrimise);
+      setSucces('Cererea de concediu a fost trimisa!');
+      setForm({ id_angajat: '', tip: 'odihna', data_start: '', data_sfarsit: '', id_aprobator: 1 });
+      setShowForm(false);
+      fetchConcedii();
+    } catch (err) {
+      setErori([err.response?.data?.detalii || 'Eroare la salvarea cererii de concediu.']);
+    }
   };
 
-  try {
-    await api.post(API.CONCEDII, dateConcediu);
-    setSucces('Cererea de concediu a fost înregistrată cu succes!');
-    setForm({ id_angajat: '', tip: 'odihna', data_start: '', data_sfarsit: '', id_aprobator: 1 });
-    fetchConcedii();
-  } catch (err) {
-    setErori([err.response?.data?.detalii || 'Eroare la trimiterea cererii de concediu. Verifică datele introduse.']);
-  }
-};
-
   const handleDecizie = async (idConcediu, statusNou, idManager) => {
-  setErori([]);
-  setSucces('');
-  try {
-    // Presupunând că ruta din app.py folosește structura standard: /api/concedii/<id>/decizie
-    // Trimitem statusul ('aprobat'/'respins') și id_manager parsate numeric
-    await api.post(`/api/concedii/${parseInt(idConcediu, 10)}/decizie`, {
-      status: statusNou,
-      id_manager: parseInt(idManager, 10)
-    });
-    
-    setSucces(`Concediul a fost ${statusNou} cu succes!`);
-    fetchConcedii();
-  } catch (err) {
-    setErori([err.response?.data?.detalii || `Nu s-a putut procesa decizia de ${statusNou}.`]);
-  }
-};
+    setErori([]);
+    setSucces('');
+    try {
+      await api.put(`${API.CONCEDII}/${idConcediu}/decizie`, {
+        status: statusNou,
+        id_manager: parseInt(idManager, 10),
+      });
+      setSucces(`Cererea a fost ${statusNou}a cu succes!`);
+      fetchConcedii();
+    } catch (err) {
+      setErori([err.response?.data?.detalii || 'Nu s-a putut procesa decizia.']);
+    }
+  };
 
   return (
-    <div style={{ fontFamily: 'Consolas, monospace', maxWidth: '900px' }}>
-
-      {/* header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '28px' }}>
+    <div style={{ padding: '24px', fontFamily: 'Consolas, monospace', color: '#d4d4d4', backgroundColor: '#1e1e1e', minHeight: '100vh' }}>
+      
+      {/* HEADER */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', borderBottom: '1px solid #333', paddingBottom: '12px' }}>
         <div>
-          <h2 style={{ color: roz, margin: 0, fontSize: '18px' }}>
-            <span style={{ color: cyan }}>{'>'}</span> CONCEDII
-          </h2>
-          <p style={{ color: '#6a9955', fontSize: '12px', margin: '6px 0 0' }}>
-            Gestionare cereri de concediu
-          </p>
+          <h2 style={{ color: 'white', margin: 0, fontSize: '20px' }}>Gestiune Concedii</h2>
+          <p style={{ margin: '4px 0 0', color: '#808080', fontSize: '12px' }}>Vizualizare, adaugare si aprobare cereri</p>
         </div>
-        <button
-          onClick={() => { setShowForm(!showForm); setErori([]); setSucces(''); }}
-          style={btnStyle(showForm ? '#808080' : roz)}
-        >
-          {showForm ? 'ANULEAZA' : '+ CERERE NOUA'}
+        <button onClick={() => setShowForm(!showForm)} style={btnStyle(cyan)}>
+          {showForm ? 'INCHIDE FORMULAR' : 'CERERE NOUA'}
         </button>
       </div>
 
-      {/* mesaje */}
-      {erori.length > 0 && (
-        <div style={{ backgroundColor: '#2d1a1a', border: `1px solid ${roz}`, padding: '12px 16px', marginBottom: '20px' }}>
-          {erori.map((e, i) => (
-            <p key={i} style={{ color: roz, margin: '2px 0', fontSize: '12px' }}>ERROR: {e}</p>
-          ))}
-        </div>
-      )}
+      {/* AFISARE ERORI / SUCCES */}
+      {erori.map((err, i) => <div key={i} style={{ color: roz, marginBottom: '10px', fontSize: '13px' }}>⚠️ {err}</div>)}
+      {succes && <div style={{ color: '#6a9955', marginBottom: '10px', fontSize: '13px' }}>✅ {succes}</div>}
 
-      {succes && (
-        <div style={{ backgroundColor: '#1a2d1a', border: '1px solid #6a9955', padding: '12px 16px', marginBottom: '20px' }}>
-          <p style={{ color: '#6a9955', margin: 0, fontSize: '12px' }}>✓ {succes}</p>
-        </div>
-      )}
-
-      {/* formular cerere noua */}
+      {/* FORMULAR CERERE NOUA */}
       {showForm && (
-        <div style={{
-          backgroundColor: '#252526',
-          border: '1px solid #333',
-          borderLeft: `3px solid ${roz}`,
-          padding: '24px',
-          marginBottom: '32px',
-          borderRadius: '2px',
-        }}>
-          <h3 style={{ color: cyan, fontSize: '13px', margin: '0 0 20px' }}>
-            CERERE CONCEDIU NOUA
-          </h3>
-
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-
-            {/* angajat select */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label style={{ color: cyan, fontSize: '11px' }}>ANGAJAT: *</label>
-              <select name="id_angajat" value={form.id_angajat}
-                onChange={handleChange} required style={selectStyle}>
-                <option value="">-- selecteaza angajat --</option>
-                {angajati.map(a => (
+        <form onSubmit={handleSubmit} style={{ backgroundColor: '#252526', border: '1px solid #333', padding: '20px', marginBottom: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <h3 style={{ margin: '0 0 8px', color: cyan, fontSize: '14px' }}>Formulați cerere nouă</h3>
+          
+          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1, minWidth: '200px' }}>
+              <label style={{ color: cyan, fontSize: '11px' }}>ANGAJAT *</label>
+              <select name="id_angajat" value={form.id_angajat} onChange={handleChange} style={selectStyle} required>
+                <option value="">-- Selecteaza Angajat --</option>
+                {Array.isArray(angajati) && angajati.map(a => (
                   <option key={a.id_angajat} value={a.id_angajat}>
-                    {a.prenume} {a.nume} (ID: {a.id_angajat})
+                    {a.nume} {a.prenume} (ID: {a.id_angajat})
                   </option>
                 ))}
               </select>
             </div>
 
-            {/* tip concediu */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label style={{ color: cyan, fontSize: '11px' }}>TIP CONCEDIU: *</label>
-              <select name="tip" value={form.tip}
-                onChange={handleChange} required style={selectStyle}>
-                {tipuriConcediu.map(t => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1, minWidth: '150px' }}>
+              <label style={{ color: cyan, fontSize: '11px' }}>TIP CONCEDIU</label>
+              <select name="tip" value={form.tip} onChange={handleChange} style={selectStyle}>
+                {tipuriConcediu.map(t => <option key={t} value={t}>{t.toUpperCase()}</option>)}
               </select>
             </div>
+          </div>
 
-            {/* date */}
-            <div style={{ display: 'flex', gap: '16px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
-                <label style={{ color: cyan, fontSize: '11px' }}>DATA START: *</label>
-                <input type="date" name="data_start" value={form.data_start}
-                  onChange={handleChange} required style={inputStyle} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
-                <label style={{ color: cyan, fontSize: '11px' }}>DATA SFARSIT: *</label>
-                <input type="date" name="data_sfarsit" value={form.data_sfarsit}
-                  onChange={handleChange} required style={inputStyle} />
-              </div>
-            </div>
+          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+            <Camp label="DATA INCEPUT *" name="data_start" type="date" value={form.data_start} onChange={handleChange} required />
+            <Camp label="DATA SFARSIT *" name="data_sfarsit" type="date" value={form.data_sfarsit} onChange={handleChange} required />
+            <Camp label="ID MANAGER APROBATOR *" name="id_aprobator" type="number" value={form.id_aprobator} onChange={handleChange} required />
+          </div>
 
-            {/* id aprobator */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label style={{ color: cyan, fontSize: '11px' }}>ID MANAGER APROBATOR: *</label>
-              <input type="number" name="id_aprobator" value={form.id_aprobator}
-                onChange={handleChange} required style={inputStyle}
-                placeholder="ID-ul managerului care aproba" />
-            </div>
-
-            <button type="submit" style={{
-              ...btnStyle(roz),
-              alignSelf: 'flex-start',
-              padding: '10px 24px',
-            }}>
-              TRIMITE CERERE
-            </button>
-          </form>
-        </div>
+          <button type="submit" style={{ ...btnStyle(roz), alignSelf: 'flex-start', marginTop: '8px' }}>
+            TRIMITE CEREREA
+          </button>
+        </form>
       )}
 
-      {/* sectiune aprobare/respingere */}
-      <div style={{
-        backgroundColor: '#252526',
-        border: '1px solid #333',
-        borderLeft: `3px solid ${cyan}`,
-        padding: '24px',
-        borderRadius: '2px',
-      }}>
-        <h3 style={{ color: cyan, fontSize: '13px', margin: '0 0 16px' }}>
-          PROCESARE CERERI — DECIZIE RAPIDA
-        </h3>
-        <p style={{ color: '#808080', fontSize: '12px', margin: '0 0 16px' }}>
-          Introdu ID-ul cererii si ID-ul managerului pentru a aproba sau respinge.
-        </p>
-
-        <DecizieRapida onDecizie={handleDecizie} />
-      </div>
-
+      {/* LISTA CERERI (TABEL REZOLVAT CU OPTIONAL CHAINING) */}
+      {loading ? (
+        <div style={{ color: cyan, fontSize: '13px' }}>Se incarca datele din sistem...</div>
+      ) : (
+        <div style={{ overflowX: 'auto', border: '1px solid #333', backgroundColor: '#252526' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#2d2d2d', borderBottom: '1px solid #333' }}>
+                <th style={thStyle}>Angajat</th>
+                <th style={thStyle}>Tip</th>
+                <th style={thStyle}>Inceput</th>
+                <th style={thStyle}>Sfarsit</th>
+                <th style={thStyle}>Status</th>
+                <th style={thStyle}>Actiuni Decizionale (Manager)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Array.isArray(concedii) && concedii.length === 0 ? (
+                <tr>
+                  <td colSpan="6" style={{ padding: '16px', textAlign: 'center', color: '#808080' }}>
+                    Nu exista cereri de concediu inregistrate.
+                  </td>
+                </tr>
+              ) : (
+                concedii?.map((c) => (
+                  <tr key={c.id_concediu} style={{ borderBottom: '1px solid #2d2d2d' }}>
+                    <td style={tdStyle}>{c.nume_angajat || `ID Angajat: ${c.id_angajat}`}</td>
+                    <td style={tdStyle}><span style={{ color: '#b5cea8' }}>{c.tip}</span></td>
+                    <td style={tdStyle}>{c.data_start}</td>
+                    <td style={tdStyle}>{c.data_sfarsit}</td>
+                    <td style={tdStyle}>
+                      <span style={{ color: statusCuloare[c.status] || '#d4d4d4', fontWeight: 'bold' }}>
+                        {c.status?.toUpperCase()}
+                      </span>
+                    </td>
+                    <td style={tdStyle}>
+                      {c.status === 'in asteptare' ? (
+                        <ZonaDecizie idConcediu={c.id_concediu} onDecizie={handleDecizie} />
+                      ) : (
+                        <span style={{ color: '#555', fontSize: '11px' }}>
+                          Procesat de Manager ID: {c.id_aprobator}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
 
-function DecizieRapida({ onDecizie }) {
-  const cyan = '#4ec9b0';
-  const roz  = '#ff22a1';
-  const [idConcediu, setIdConcediu] = useState('');
-  const [idManager,  setIdManager]  = useState('');
-
+// Componente secundare interne protejate
+function ZonaDecizie({ idConcediu, onDecizie }) {
+  const [idManager, setIdManager] = useState('1');
   return (
-    <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-        <label style={{ color: cyan, fontSize: '11px' }}>ID CERERE:</label>
-        <input type="number" value={idConcediu}
-          onChange={e => setIdConcediu(e.target.value)}
-          style={{ ...inputStyle, width: '120px' }}
-          placeholder="ex: 5" />
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
         <label style={{ color: cyan, fontSize: '11px' }}>ID MANAGER:</label>
         <input type="number" value={idManager}
           onChange={e => setIdManager(e.target.value)}
           style={{ ...inputStyle, width: '120px' }}
           placeholder="ex: 1" />
       </div>
-      <button
-        onClick={() => onDecizie(idConcediu, 'aprobat', Number(idManager))}
-        disabled={!idConcediu || !idManager}
-        style={btnStyle('#6a9955')}
-      >
+      <button onClick={() => onDecizie(idConcediu, 'aprobat', Number(idManager))} disabled={!idConcediu || !idManager} style={btnStyle('#6a9955')}>
         APROBA
       </button>
-      <button
-        onClick={() => onDecizie(idConcediu, 'respins', Number(idManager))}
-        disabled={!idConcediu || !idManager}
-        style={btnStyle(roz)}
-      >
+      <button onClick={() => onDecizie(idConcediu, 'respins', Number(idManager))} disabled={!idConcediu || !idManager} style={btnStyle(roz)}>
         RESPINGE
       </button>
     </div>
   );
 }
 
+function Camp({ label, name, value, onChange, type = 'text', placeholder, required }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1, minWidth: '140px' }}>
+      <label style={{ color: cyan, fontSize: '11px' }}>
+        {label}{required && <span style={{ color: '#ff22a1' }}> *</span>}
+      </label>
+      <input type={type} name={name} value={value} onChange={onChange}
+        placeholder={placeholder} required={required} style={inputStyle} />
+    </div>
+  );
+}
+
+// Stiluri CSS-in-JS
 const btnStyle = (culoare) => ({
   backgroundColor: 'transparent',
   color: culoare,
@@ -278,7 +278,6 @@ const selectStyle = {
   fontFamily: 'Consolas, monospace',
   fontSize: '13px',
   outline: 'none',
-  width: '100%',
 };
 
 const inputStyle = {
@@ -289,5 +288,18 @@ const inputStyle = {
   fontFamily: 'Consolas, monospace',
   fontSize: '13px',
   outline: 'none',
-  boxSizing: 'border-box',
+};
+
+const thStyle = {
+  padding: '12px',
+  color: '#d4d4d4',
+  fontWeight: 'bold',
+  borderBottom: '2px solid #333',
+};
+
+const tdStyle = {
+  padding: '12px',
+  color: '#9cdcfe',
+  verticalAlign: 'middle',
+  whiteSpace: 'nowrap',
 };

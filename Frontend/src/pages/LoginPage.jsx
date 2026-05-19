@@ -152,12 +152,13 @@ export default function LoginPage() {
           {/* mesaj eroare / succes */}
           {mesaj && (
             <p style={{
-              margin: 0,
-              fontSize: '12px',
-              color: mesaj.includes('ERROR') ? roz : '#6a9955',
-            }}>
-              {mesaj}
-            </p>
+            margin: 0,
+            fontSize: '12px',
+            // Adăugăm „?” după mesaj ca să verifice dacă textul există înainte de a apela includes
+            color: mesaj?.includes('ERROR') ? roz : '#6a9955', 
+          }}>
+          {mesaj}
+          </p>
           )}
         </form>
       </div>
