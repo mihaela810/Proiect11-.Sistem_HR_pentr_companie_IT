@@ -1,15 +1,12 @@
-﻿import { useState, useEffect, useContext } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
+import { poateFace } from '../utils/roluri';
 import api from '../api/axios';
 import API from '../constants/apiRoutes';
-import { AuthContext } from '../context/AuthContext';
 
 const roz  = '#ff22a1';
 const cyan = '#4ec9b0';
-const verde = '#6a9955';
-const gri   = '#808080';
-const fundal_sectiune = '#1e1e1e';
-const fundal_modal    = 'rgba(0,0,0,0.75)';
 
 function Sectiune({ titlu, children }) {
   return (
@@ -22,68 +19,11 @@ function Sectiune({ titlu, children }) {
   );
 }
 
-function InfoRow({ label, value, highlight }) {
+function InfoRow({ label, value }) {
   return (
     <div style={{ display: 'flex', gap: '16px', padding: '7px 0', borderBottom: '1px solid #2d2d2d' }}>
-      <span style={{ color: gri, minWidth: '200px', fontSize: '12px' }}>{label}</span>
-      <span style={{ color: highlight ? cyan : '#d4d4d4', fontSize: '12px', fontWeight: highlight ? 'bold' : 'normal' }}>
-        {value || '—'}
-      </span>
-    </div>
-  );
-}
-
-function Modal({ titlu, onClose, children }) {
-  return (
-    <div style={{
-      position: 'fixed', inset: 0, backgroundColor: fundal_modal,
-      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-    }}>
-      <div style={{
-        backgroundColor: '#252526', border: '1px solid #3c3c3c', borderRadius: '4px',
-        padding: '24px', minWidth: '380px', maxWidth: '480px', fontFamily: 'Consolas, monospace',
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-          <h3 style={{ color: roz, margin: 0, fontSize: '14px' }}>{titlu}</h3>
-          <button onClick={onClose} style={{ ...btnStyle(gri), padding: '2px 8px' }}>✕</button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function Camp({ label, type = 'text', value, onChange, placeholder }) {
-  return (
-    <div style={{ marginBottom: '14px' }}>
-      <label style={{ display: 'block', color: gri, fontSize: '11px', marginBottom: '4px', letterSpacing: '0.5px' }}>
-        {label}
-      </label>
-      <input
-        type={type}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder}
-        style={{
-          width: '100%', boxSizing: 'border-box',
-          backgroundColor: fundal_sectiune, border: '1px solid #3c3c3c',
-          color: '#d4d4d4', fontFamily: 'Consolas, monospace', fontSize: '12px',
-          padding: '7px 10px', outline: 'none', borderRadius: '2px',
-        }}
-      />
-    </div>
-  );
-}
-
-function Alerta({ tip, mesaj }) {
-  if (!mesaj) return null;
-  const culoare = tip === 'eroare' ? '#f44747' : verde;
-  return (
-    <div style={{
-      color: culoare, fontSize: '11px', padding: '8px 10px',
-      border: `1px solid ${culoare}`, borderRadius: '2px', marginTop: '12px',
-    }}>
-      {tip === 'eroare' ? '⚠ ' : '✓ '}{mesaj}
+      <span style={{ color: '#808080', minWidth: '200px', fontSize: '12px' }}>{label}</span>
+      <span style={{ color: '#d4d4d4', fontSize: '12px' }}>{value || '—'}</span>
     </div>
   );
 }
@@ -91,119 +31,55 @@ function Alerta({ tip, mesaj }) {
 export default function AngajatProfilPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user }   = useContext(AuthContext);
-  const [profil, setProfil] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [eroare, setEroare]   = useState(null);
+  const { user } = useAuth();
+  const rol = user?.rol || '';
 
-  // stare modals
-  const [modalDeschis, setModalDeschis] = useState(null); // 'marire' | 'parola' | 'dezactivare'
- 
-  // stare formular mărire salariu
-  const [marire, setMarire] = useState({ procent: '', motiv: '' });
-  const [marireStatus, setMarireStatus] = useState({ tip: null, mesaj: '' });
-  const [marireLoading, setMarireLoading] = useState(false);
+  const [profil, setProfil]       = useState(null);
+  const [loading, setLoading]     = useState(true);
+  const [eroare, setEroare]       = useState(null);
+  const [showMarire, setShowMarire] = useState(false);
+  const [procent, setProcent]     = useState('');
+  const [motiv, setMotiv]         = useState('');
+  const [mesajMarire, setMesajMarire] = useState('');
+  const [loadingMarire, setLoadingMarire] = useState(false);
 
-  // stare formular schimbare parolă
-  const [parola, setParola] = useState({ veche: '', noua: '', confirma: '' });
-  const [parolaStatus, setParolaStatus] = useState({ tip: null, mesaj: '' });
-  const [parolaLoading, setParolaLoading] = useState(false);
- 
-  // stare dezactivare cont
-  const [motivDezactivare, setMotivDezactivare] = useState('');
-  const [dezactivareStatus, setDezactivareStatus] = useState({ tip: null, mesaj: '' });
-  const [dezactivareLoading, setDezactivareLoading] = useState(false);
- 
-  const inchideModal = () => {
-    setModalDeschis(null);
-    setMarire({ procent: '', motiv: '' });
-    setMarireStatus({ tip: null, mesaj: '' });
-    setParola({ veche: '', noua: '', confirma: '' });
-    setParolaStatus({ tip: null, mesaj: '' });
-    setMotivDezactivare('');
-    setDezactivareStatus({ tip: null, mesaj: '' });
-  };
-
-  useEffect(() => {
+  const incarcaProfil = () => {
+    setLoading(true);
     api.get(API.ANGAJAT_PROFIL(id))
       .then(res => setProfil(res.data))
       .catch(() => setEroare('Nu s-a putut incarca profilul angajatului.'))
       .finally(() => setLoading(false));
-  }, [id]);
+  };
 
-  // ── handlers ────────────────────────────────────────────────────────────────
- 
-  const handleMarireSalariu = async () => {
-    const procent = parseFloat(marire.procent);
-    if (!procent || procent <= 0 || procent > 100) {
-      setMarireStatus({ tip: 'eroare', mesaj: 'Procentul trebuie să fie între 0.01 și 100.' });
+  useEffect(() => { incarcaProfil(); }, [id]);
+
+  const handleMarire = async (e) => {
+    e.preventDefault();
+    setMesajMarire('');
+    if (!procent || Number(procent) <= 0) {
+      setMesajMarire('ERROR: Procentul trebuie sa fie pozitiv.');
       return;
     }
-    if (!marire.motiv.trim()) {
-      setMarireStatus({ tip: 'eroare', mesaj: 'Motivul este obligatoriu.' });
-      return;
-    }
-    setMarireLoading(true);
+    setLoadingMarire(true);
     try {
-      await api.post(API.MARIRE_SALARIU(id), { procent, motiv: marire.motiv });
-      setMarireStatus({ tip: 'succes', mesaj: `Salariul a fost mărit cu ${procent}%.` });
-      // reîncarcă profilul ca să apară noul salariu
-      const res = await api.get(API.ANGAJAT_PROFIL(id));
-      setProfil(res.data);
-    } catch (e) {
-      const msg = e.response?.data?.mesaj || e.response?.data?.error || 'Eroare la mărirea salariului.';
-      setMarireStatus({ tip: 'eroare', mesaj: msg });
-    } finally {
-      setMarireLoading(false);
-    }
-  };
- 
-  const handleSchimbareParola = async () => {
-    if (!parola.veche || !parola.noua || !parola.confirma) {
-      setParolaStatus({ tip: 'eroare', mesaj: 'Toate câmpurile sunt obligatorii.' });
-      return;
-    }
-    if (parola.noua !== parola.confirma) {
-      setParolaStatus({ tip: 'eroare', mesaj: 'Parola nouă nu coincide cu confirmarea.' });
-      return;
-    }
-    if (parola.noua.length < 6) {
-      setParolaStatus({ tip: 'eroare', mesaj: 'Parola nouă trebuie să aibă cel puțin 6 caractere.' });
-      return;
-    }
-    setParolaLoading(true);
-    try {
-      await api.post(API.SCHIMBARE_PAROLA, {
-        id_utilizator: user?.id,
-        parola_veche: parola.veche,
-        parola_noua: parola.noua,
+      await api.post(API.ANGAJAT_MARIRE, {
+        id_angajat: id,
+        procent:    Number(procent),
+        motiv:      motiv || 'Marire salariala',
       });
-      setParolaStatus({ tip: 'succes', mesaj: 'Parola a fost schimbată cu succes.' });
-    } catch (e) {
-      const msg = e.response?.data?.mesaj || e.response?.data?.error || 'Eroare la schimbarea parolei.';
-      setParolaStatus({ tip: 'eroare', mesaj: msg });
+      setMesajMarire(`✓ Marire de ${procent}% aplicata cu succes!`);
+      setProcent('');
+      setMotiv('');
+      setTimeout(() => {
+        setShowMarire(false);
+        setMesajMarire('');
+        incarcaProfil();
+      }, 2000);
+    } catch (err) {
+      const data = err.response?.data;
+      setMesajMarire(`ERROR: ${data?.detalii || data?.mesaj || 'Eroare la marire.'}`);
     } finally {
-      setParolaLoading(false);
-    }
-  };
- 
-  const handleDezactivareCont = async () => {
-    if (!motivDezactivare.trim()) {
-      setDezactivareStatus({ tip: 'eroare', mesaj: 'Motivul dezactivării este obligatoriu.' });
-      return;
-    }
-    setDezactivareLoading(true);
-    try {
-      await api.post(API.DEZACTIVARE_CONT, { id_utilizator: parseInt(id), motiv: motivDezactivare });
-      setDezactivareStatus({ tip: 'succes', mesaj: 'Contul a fost dezactivat.' });
-      // actualizează statusul în profil local
-      setProfil(prev => ({ ...prev, status: 'inactiv' }));
-      setTimeout(inchideModal, 1500);
-    } catch (e) {
-      const msg = e.response?.data?.mesaj || e.response?.data?.error || 'Eroare la dezactivarea contului.';
-      setDezactivareStatus({ tip: 'eroare', mesaj: msg });
-    } finally {
-      setDezactivareLoading(false);
+      setLoadingMarire(false);
     }
   };
 
@@ -213,12 +89,13 @@ export default function AngajatProfilPage() {
 
   const formatRON  = (v) => v ? `${Number(v).toLocaleString('ro-RO')} RON` : '—';
   const formatData = (d) => d ? new Date(d).toLocaleDateString('ro-RO') : '—';
-  const esteActiv  = profil.status === 'activ';
 
-   // roluri care pot face acțiuni sensibile
-  const poateMareSalariu   = ['hr_manager', 'director', 'ceo', 'admin'].includes(user?.rol);
-  const poateDezactiva     = ['hr_manager', 'director', 'ceo', 'admin'].includes(user?.rol);
-  const poateSchimbaParola = true; // oricine își poate schimba propria parolă
+  const culoareGrila = () => {
+    const poz = profil.analiza_piata?.pozitie_grila || '';
+    if (poz.includes('Subdeplătit')) return roz;
+    if (poz.includes('Peste'))       return '#f39c12';
+    return '#6a9955';
+  };
 
   return (
     <div style={{ fontFamily: 'Consolas, monospace', maxWidth: '900px' }}>
@@ -230,50 +107,98 @@ export default function AngajatProfilPage() {
             {profil.prenume} {profil.nume}
           </h2>
           <p style={{ color: '#6a9955', fontSize: '12px', margin: '6px 0 0' }}>
-             {profil.functie} — {profil.departament}
+            {profil.functie} — {profil.departament}
           </p>
-          {!esteActiv && (
-            <span style={{
-              display: 'inline-block', marginTop: '6px', padding: '2px 8px',
-              border: '1px solid #f44747', color: '#f44747', fontSize: '10px', letterSpacing: '1px',
-            }}>
-              CONT DEZACTIVAT
-            </span>
-          )}
         </div>
-        {/* butoane acțiuni */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button onClick={() => navigate(`/angajati/${id}/editeaza`)} style={btnStyle('#f39c12')}>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          {poateFace(rol, 'salarii') && (
+            <button
+              onClick={() => { setShowMarire(!showMarire); setMesajMarire(''); }}
+              style={btnStyle('#6a9955')}
+            >
+              {showMarire ? 'ANULEAZA' : 'MARIRE SALARIU'}
+            </button>
+          )}
+          {!poateFace(rol, 'readonly') && (
+            <button
+              onClick={() => navigate(`/angajati/${id}/editeaza`)}
+              style={btnStyle('#f39c12')}
+            >
               EDITEAZA
             </button>
-            <button onClick={() => navigate('/angajati')} style={btnStyle(gri)}>
-              INAPOI
-            </button>
-          </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            {poateSchimbaParola && (
-              <button onClick={() => setModalDeschis('parola')} style={btnStyle(cyan)}>
-                SCHIMBA PAROLA
-              </button>
-            )}
-            {poateMareSalariu && esteActiv && (
-              <button onClick={() => setModalDeschis('marire')} style={btnStyle(verde)}>
-                MARIRE SALARIU
-              </button>
-            )}
-            {poateDezactiva && esteActiv && (
-              <button onClick={() => setModalDeschis('dezactivare')} style={btnStyle('#f44747')}>
-                DEZACTIVEAZA CONT
-              </button>
-            )}
-          </div>
+          )}
+          {poateFace(rol, 'angajati') && !poateFace(rol, 'readonly') && (
+            <BtnDezactivare idAngajat={id} onSuccess={() => navigate('/angajati')} />
+          )}
+          <button onClick={() => navigate('/angajati')} style={btnStyle('#808080')}>
+            INAPOI
+          </button>
         </div>
       </div>
 
+      {/* formular marire */}
+      {showMarire && poateFace(rol, 'salarii') && (
+        <div style={{
+          backgroundColor: '#252526', border: `1px solid #6a9955`,
+          borderLeft: `3px solid #6a9955`, padding: '20px',
+          marginBottom: '28px', borderRadius: '2px',
+        }}>
+          <h3 style={{ color: '#6a9955', fontSize: '13px', margin: '0 0 16px' }}>
+            ACORDA MARIRE SALARIALA
+          </h3>
+          <form onSubmit={handleMarire} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div style={{ display: 'flex', gap: '16px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
+                <label style={{ color: cyan, fontSize: '11px' }}>PROCENT MARIRE (%):</label>
+                <input
+                  type="number" value={procent} min="0.1" step="0.1"
+                  onChange={e => setProcent(e.target.value)}
+                  required style={inputStyle}
+                  placeholder="ex: 10"
+                />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 2 }}>
+                <label style={{ color: cyan, fontSize: '11px' }}>MOTIV:</label>
+                <input
+                  type="text" value={motiv}
+                  onChange={e => setMotiv(e.target.value)}
+                  style={inputStyle}
+                  placeholder="ex: performanta excelenta Q1"
+                />
+              </div>
+            </div>
+            {/* preview salariu nou */}
+            {procent && Number(procent) > 0 && (
+              <div style={{ backgroundColor: '#1e1e1e', border: '1px solid #333', padding: '10px 14px', fontSize: '12px' }}>
+                <span style={{ color: '#808080' }}>Salariu curent: </span>
+                <span style={{ color: '#9cdcfe' }}>{formatRON(profil.salariu_curent)}</span>
+                <span style={{ color: '#555', margin: '0 8px' }}>→</span>
+                <span style={{ color: '#6a9955', fontWeight: 'bold' }}>
+                  {formatRON(profil.salariu_curent * (1 + Number(procent) / 100))}
+                </span>
+                <span style={{ color: '#6a9955', marginLeft: '8px' }}>
+                  (+{procent}%)
+                </span>
+              </div>
+            )}
+            {mesajMarire && (
+              <p style={{ color: mesajMarire.startsWith('ERROR') ? roz : '#6a9955', margin: 0, fontSize: '12px' }}>
+                {mesajMarire}
+              </p>
+            )}
+            <button type="submit" disabled={loadingMarire} style={{
+              ...btnStyle('#6a9955'), alignSelf: 'flex-start',
+              padding: '10px 24px', border: `2px solid #6a9955`,
+            }}>
+              {loadingMarire ? 'SE_APLICA...' : 'APLICA_MARIRE()'}
+            </button>
+          </form>
+        </div>
+      )}
+
       {/* date personale */}
-      <Sectiune titlu=" DATE PERSONALE">
-        <InfoRow label="CNP"           value={profil.cnp} />
+      <Sectiune titlu="DATE PERSONALE">
+        {poateFace(rol, 'cnp') && <InfoRow label="CNP" value={profil.cnp} />}
         <InfoRow label="Email"         value={profil.email} />
         <InfoRow label="Telefon"       value={profil.telefon} />
         <InfoRow label="Data angajare" value={formatData(profil.data_angajare)} />
@@ -282,22 +207,33 @@ export default function AngajatProfilPage() {
 
       {/* pozitie si salariu */}
       <Sectiune titlu="POZITIE SI SALARIU">
-        <InfoRow label="Functie"        value={profil.functie} />
-        <InfoRow label="Departament"    value={profil.departament} />
-        <InfoRow label="Salariu brut"      value={formatRON(profil.salariu_curent)} />
-        <InfoRow
-          label="Salariu net estimat"
-          value={
-            profil.analiza_piata?.salariu_net_calculat
-              ? formatRON(profil.analiza_piata.salariu_net_calculat)
-              : '—'
-          }
-          highlight
-        />
-        <InfoRow label="Grila salariala"
-          value={`${formatRON(profil.salariu_min)} — ${formatRON(profil.salariu_max)}`} />
-        <InfoRow label="Compa-ratio"    value={profil.analiza_piata?.compa_ratio} />
-        <InfoRow label="Pozitie grila"  value={profil.analiza_piata?.pozitie_grila} />
+        <InfoRow label="Functie"     value={profil.functie} />
+        <InfoRow label="Departament" value={profil.departament} />
+        {poateFace(rol, 'salarii') && (
+          <>
+            <InfoRow label="Salariu brut" value={formatRON(profil.salariu_curent)} />
+            <InfoRow
+              label="Salariu net estimat"
+              value={
+                profil.analiza_piata?.salariu_net_calculat
+                  ? formatRON(profil.analiza_piata.salariu_net_calculat)
+                  : '—'
+              }
+            />
+            <InfoRow
+              label="Grila salariala"
+              value={`${formatRON(profil.salariu_min)} — ${formatRON(profil.salariu_max)}`}
+            />
+            <div style={{ display: 'flex', gap: '16px', padding: '7px 0', borderBottom: '1px solid #2d2d2d' }}>
+              <span style={{ color: '#808080', minWidth: '200px', fontSize: '12px' }}>
+                Pozitie in grila
+              </span>
+              <span style={{ color: culoareGrila(), fontSize: '12px', fontWeight: 'bold' }}>
+                {profil.analiza_piata?.pozitie_grila} ({profil.analiza_piata?.compa_ratio})
+              </span>
+            </div>
+          </>
+        )}
       </Sectiune>
 
       {/* evaluari */}
@@ -309,7 +245,10 @@ export default function AngajatProfilPage() {
             <thead>
               <tr style={{ borderBottom: `1px solid ${roz}` }}>
                 {['DATA', 'TEHNIC', 'COMUNICARE', 'LEADERSHIP', 'SCOR FINAL', 'FEEDBACK'].map(h => (
-                  <th key={h} style={{ textAlign: 'left', padding: '6px 10px', color: cyan, fontWeight: 'normal' }}>
+                  <th key={h} style={{
+                    textAlign: 'left', padding: '6px 10px',
+                    color: cyan, fontWeight: 'normal',
+                  }}>
                     {h}
                   </th>
                 ))}
@@ -333,16 +272,19 @@ export default function AngajatProfilPage() {
         )}
       </Sectiune>
 
-       {/* ── proiecte active ─────────────────────────────────────────────────── */}
+      {/* proiecte */}
       <Sectiune titlu={`PROIECTE ACTIVE (${profil.proiecte?.length || 0})`}>
         {profil.proiecte?.length === 0 ? (
-          <p style={{ color: gri, fontSize: '12px' }}>Nu exista proiecte active.</p>
+          <p style={{ color: '#808080', fontSize: '12px' }}>Nu exista proiecte active.</p>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${roz}` }}>
                 {['PROIECT', 'ROL', 'ORE ALOCATE'].map(h => (
-                  <th key={h} style={{ textAlign: 'left', padding: '6px 10px', color: cyan, fontWeight: 'normal' }}>
+                  <th key={h} style={{
+                    textAlign: 'left', padding: '6px 10px',
+                    color: cyan, fontWeight: 'normal',
+                  }}>
                     {h}
                   </th>
                 ))}
@@ -361,151 +303,132 @@ export default function AngajatProfilPage() {
         )}
       </Sectiune>
 
-      {/* ── istoric salarial ────────────────────────────────────────────────── */}
-      <Sectiune titlu={`ISTORIC SALARIAL (${profil.istoric_salarii?.length || 0})`}>
-        {profil.istoric_salarii?.length === 0 ? (
-          <p style={{ color: gri, fontSize: '12px' }}>Nu exista modificari salariale.</p>
-        ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-            <thead>
-              <tr style={{ borderBottom: `1px solid ${roz}` }}>
-                {['DATA', 'SALARIU VECHI', 'SALARIU NOU', 'MOTIV'].map(h => (
-                  <th key={h} style={{ textAlign: 'left', padding: '6px 10px', color: cyan, fontWeight: 'normal' }}>
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {profil.istoric_salarii.map((s, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid #2d2d2d' }}>
-                  <td style={tdStyle}>{formatData(s.data_modificare)}</td>
-                  <td style={tdStyle}>{formatRON(s.salariu_vechi)}</td>
-                  <td style={{ ...tdStyle, color: cyan }}>{formatRON(s.salariu_nou)}</td>
-                  <td style={{ ...tdStyle, color: gri }}>{s.motiv || '—'}</td>
+      {/* istoric salarial */}
+      {poateFace(rol, 'salarii') && (
+        <Sectiune titlu={`ISTORIC SALARIAL (${profil.istoric_salarii?.length || 0})`}>
+          {profil.istoric_salarii?.length === 0 ? (
+            <p style={{ color: '#808080', fontSize: '12px' }}>Nu exista modificari salariale.</p>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${roz}` }}>
+                  {['DATA', 'SALARIU VECHI', 'SALARIU NOU', 'MOTIV'].map(h => (
+                    <th key={h} style={{
+                      textAlign: 'left', padding: '6px 10px',
+                      color: cyan, fontWeight: 'normal',
+                    }}>
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </Sectiune>
-
-      {/* ═══════════════════════════════════════════════════════════════════════
-          MODALS
-      ══════════════════════════════════════════════════════════════════════════ */}
- 
-      {/* ── modal mărire salariu ──────────────────────────────────────────── */}
-      {modalDeschis === 'marire' && (
-        <Modal titlu="MARIRE SALARIU" onClose={inchideModal}>
-          <p style={{ color: gri, fontSize: '11px', margin: '0 0 16px' }}>
-            Salariu curent: <span style={{ color: cyan }}>{formatRON(profil.salariu_curent)}</span>
-          </p>
-          <Camp
-            label="PROCENT MARIRE (%)"
-            type="number"
-            value={marire.procent}
-            onChange={v => setMarire(prev => ({ ...prev, procent: v }))}
-            placeholder="ex: 10"
-          />
-          {marire.procent && !isNaN(parseFloat(marire.procent)) && (
-            <p style={{ color: verde, fontSize: '11px', margin: '-8px 0 12px' }}>
-              Salariu nou estimat:{' '}
-              {formatRON(profil.salariu_curent * (1 + parseFloat(marire.procent) / 100))}
-            </p>
+              </thead>
+              <tbody>
+                {profil.istoric_salarii.map((s, i) => (
+                  <tr key={i} style={{ borderBottom: '1px solid #2d2d2d' }}>
+                    <td style={tdStyle}>{formatData(s.data_modificare)}</td>
+                    <td style={tdStyle}>{formatRON(s.salariu_vechi)}</td>
+                    <td style={{ ...tdStyle, color: cyan }}>{formatRON(s.salariu_nou)}</td>
+                    <td style={{ ...tdStyle, color: '#808080' }}>{s.motiv || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
-          <Camp
-            label="MOTIV"
-            value={marire.motiv}
-            onChange={v => setMarire(prev => ({ ...prev, motiv: v }))}
-            placeholder="ex: Evaluare anuala excelenta"
-          />
-          <Alerta tip={marireStatus.tip} mesaj={marireStatus.mesaj} />
-          <div style={{ display: 'flex', gap: '8px', marginTop: '20px', justifyContent: 'flex-end' }}>
-            <button onClick={inchideModal} style={btnStyle(gri)} disabled={marireLoading}>
-              ANULEAZA
-            </button>
-            <button
-              onClick={handleMarireSalariu}
-              style={btnStyle(verde)}
-              disabled={marireLoading}
-            >
-              {marireLoading ? 'SE SALVEAZA...' : 'CONFIRMA MARIREA'}
-            </button>
-          </div>
-        </Modal>
-      )}
- 
-      {/* ── modal schimbare parolă ────────────────────────────────────────── */}
-      {modalDeschis === 'parola' && (
-        <Modal titlu="SCHIMBARE PAROLA" onClose={inchideModal}>
-          <Camp
-            label="PAROLA ACTUALA"
-            type="password"
-            value={parola.veche}
-            onChange={v => setParola(prev => ({ ...prev, veche: v }))}
-            placeholder="••••••••"
-          />
-          <Camp
-            label="PAROLA NOUA"
-            type="password"
-            value={parola.noua}
-            onChange={v => setParola(prev => ({ ...prev, noua: v }))}
-            placeholder="min. 6 caractere"
-          />
-          <Camp
-            label="CONFIRMA PAROLA NOUA"
-            type="password"
-            value={parola.confirma}
-            onChange={v => setParola(prev => ({ ...prev, confirma: v }))}
-            placeholder="••••••••"
-          />
-          <Alerta tip={parolaStatus.tip} mesaj={parolaStatus.mesaj} />
-          <div style={{ display: 'flex', gap: '8px', marginTop: '20px', justifyContent: 'flex-end' }}>
-            <button onClick={inchideModal} style={btnStyle(gri)} disabled={parolaLoading}>
-              ANULEAZA
-            </button>
-            <button
-              onClick={handleSchimbareParola}
-              style={btnStyle(cyan)}
-              disabled={parolaLoading}
-            >
-              {parolaLoading ? 'SE SALVEAZA...' : 'SCHIMBA PAROLA'}
-            </button>
-          </div>
-        </Modal>
-      )}
- 
-      {/* ── modal dezactivare cont ────────────────────────────────────────── */}
-      {modalDeschis === 'dezactivare' && (
-        <Modal titlu="DEZACTIVARE CONT" onClose={inchideModal}>
-          <p style={{ color: '#f44747', fontSize: '11px', margin: '0 0 16px', lineHeight: '1.6' }}>
-            Atenție: această acțiune va dezactiva contul angajatului{' '}
-            <span style={{ color: '#d4d4d4' }}>{profil.prenume} {profil.nume}</span>.
-            Angajatul nu va mai putea să se autentifice.
-          </p>
-          <Camp
-            label="MOTIV DEZACTIVARE"
-            value={motivDezactivare}
-            onChange={setMotivDezactivare}
-            placeholder="ex: Incetarea contractului de munca"
-          />
-          <Alerta tip={dezactivareStatus.tip} mesaj={dezactivareStatus.mesaj} />
-          <div style={{ display: 'flex', gap: '8px', marginTop: '20px', justifyContent: 'flex-end' }}>
-            <button onClick={inchideModal} style={btnStyle(gri)} disabled={dezactivareLoading}>
-              ANULEAZA
-            </button>
-            <button
-              onClick={handleDezactivareCont}
-              style={btnStyle('#f44747')}
-              disabled={dezactivareLoading}
-            >
-              {dezactivareLoading ? 'SE PROCESEAZA...' : 'DEZACTIVEAZA'}
-            </button>
-          </div>
-        </Modal>
+        </Sectiune>
       )}
 
     </div>
+  );
+}
+
+function BtnDezactivare({ idAngajat, onSuccess }) {
+  const roz = '#ff22a1';
+  const [showModal, setShowModal] = useState(false);
+  const [motiv, setMotiv]         = useState('');
+  const [loading, setLoading]     = useState(false);
+  const [eroare, setEroare]       = useState('');
+
+  const handleDezactivare = async () => {
+    if (!motiv.trim()) { setEroare('Motivul este obligatoriu.'); return; }
+    setLoading(true);
+    try {
+      await api.post(API.ANGAJAT_DEZACTIVARE, {
+        id_angajat: idAngajat,
+        motiv,
+      });
+      onSuccess();
+    } catch (err) {
+      const data = err.response?.data;
+      setEroare(data?.detalii || data?.mesaj || 'Eroare la dezactivare.');
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <button onClick={() => setShowModal(true)} style={{
+        backgroundColor: 'transparent', color: roz,
+        border: `1px solid ${roz}`, padding: '6px 14px',
+        fontFamily: 'Consolas, monospace', fontSize: '12px', cursor: 'pointer',
+      }}>
+        DEZACTIVEAZA
+      </button>
+
+      {showModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.75)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000,
+        }}>
+          <div style={{
+            backgroundColor: '#252526', border: `1px solid ${roz}`,
+            padding: '28px', borderRadius: '4px', width: '420px',
+            fontFamily: 'Consolas, monospace',
+          }}>
+            <h3 style={{ color: roz, margin: '0 0 16px', fontSize: '14px' }}>
+              CONFIRMA DEZACTIVARE
+            </h3>
+            <p style={{ color: '#808080', fontSize: '12px', margin: '0 0 16px' }}>
+              Angajatul va fi marcat ca inactiv. Aceasta actiune poate fi reversata.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px' }}>
+              <label style={{ color: '#4ec9b0', fontSize: '11px' }}>MOTIV: *</label>
+              <textarea
+                value={motiv}
+                onChange={e => { setMotiv(e.target.value); setEroare(''); }}
+                rows={3}
+                placeholder="ex: demisie, contract expirat..."
+                style={{
+                  backgroundColor: '#3c3c3c', color: 'white',
+                  border: '1px solid #555', padding: '8px 12px',
+                  fontFamily: 'Consolas, monospace', fontSize: '13px',
+                  outline: 'none', resize: 'vertical',
+                }}
+              />
+            </div>
+            {eroare && <p style={{ color: roz, fontSize: '12px', margin: '0 0 12px' }}>ERROR: {eroare}</p>}
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={handleDezactivare} disabled={loading} style={{
+                backgroundColor: 'transparent', color: loading ? '#555' : roz,
+                border: `2px solid ${loading ? '#555' : roz}`,
+                padding: '8px 20px', fontFamily: 'Consolas, monospace',
+                fontSize: '12px', cursor: loading ? 'not-allowed' : 'pointer',
+              }}>
+                {loading ? 'Se proceseaza...' : 'CONFIRMA'}
+              </button>
+              <button onClick={() => { setShowModal(false); setMotiv(''); setEroare(''); }} style={{
+                backgroundColor: 'transparent', color: '#808080',
+                border: '1px solid #808080', padding: '8px 20px',
+                fontFamily: 'Consolas, monospace', fontSize: '12px', cursor: 'pointer',
+              }}>
+                ANULEAZA
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -516,12 +439,15 @@ const tdStyle = {
 };
 
 const btnStyle = (culoare) => ({
-  backgroundColor: 'transparent',
-  color: culoare,
-  border: `1px solid ${culoare}`,
-  padding: '6px 14px',
-  fontFamily: 'Consolas, monospace',
-  fontSize: '12px',
+  backgroundColor: 'transparent', color: culoare,
+  border: `1px solid ${culoare}`, padding: '6px 14px',
+  fontFamily: 'Consolas, monospace', fontSize: '12px',
   cursor: 'pointer',
-  letterSpacing: '0.5px',
 });
+
+const inputStyle = {
+  backgroundColor: '#3c3c3c', color: 'white',
+  border: '1px solid #555', padding: '8px 12px',
+  fontFamily: 'Consolas, monospace', fontSize: '13px',
+  outline: 'none', width: '100%', boxSizing: 'border-box',
+};

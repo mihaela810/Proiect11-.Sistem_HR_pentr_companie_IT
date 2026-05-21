@@ -26,11 +26,9 @@ export default function Navbar() {
       flexShrink: 0,
     }}>
 
-      {/* user info — fara comentariu, doar numele */}
+      {/* user info */}
       <div style={{ fontSize: '12px', color: '#9cdcfe' }}>
-        <span style={{ color: cyan }}>
-          {user?.username || 'unknown'}
-        </span>
+        <span style={{ color: cyan }}>{user?.username || 'unknown'}</span>
         {user?.rol && (
           <span style={{ color: '#808080', marginLeft: '12px' }}>
             [{user.rol}]
@@ -38,22 +36,29 @@ export default function Navbar() {
         )}
       </div>
 
-      {/* logout fara paranteze */}
-      <button
-        onClick={handleLogout}
-        style={{
-          backgroundColor: 'transparent',
-          color: roz,
-          border: `1px solid ${roz}`,
-          padding: '4px 14px',
-          fontFamily: 'Consolas, monospace',
-          fontSize: '11px',
-          cursor: 'pointer',
-          letterSpacing: '0.5px',
-        }}
-      >
-        LOGOUT
-      </button>
+      {/* butoane dreapta */}
+      <div style={{ display: 'flex', gap: '8px' }}>
+        <button
+          onClick={() => navigate('/profil-meu')}
+          style={btnStyle(cyan)}
+        >
+          PROFILUL MEU
+        </button>
+        <button onClick={handleLogout} style={btnStyle(roz)}>
+          LOGOUT
+        </button>
+      </div>
     </header>
   );
 }
+
+const btnStyle = (culoare) => ({
+  backgroundColor: 'transparent',
+  color: culoare,
+  border: `1px solid ${culoare}`,
+  padding: '4px 14px',
+  fontFamily: 'Consolas, monospace',
+  fontSize: '11px',
+  cursor: 'pointer',
+  letterSpacing: '0.5px',
+});

@@ -166,7 +166,7 @@ export default function AngajatFormPage() {
         {/* BUTOANE ACTIONS */}
         <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
           <button type="submit" disabled={loading} style={btnStyle(roz)}>
-            {loading ? 'SE SALVEAZA...' : 'SALVEAZA MODIFICARILE'}
+            {loading ? 'Se salveaza...' : 'SALVEAZA MODIFICARILE'}
           </button>
           <button type="button" onClick={() => navigate('/angajati')} style={btnStyle('#808080')}>
             ANULEAZA
