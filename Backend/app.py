@@ -749,14 +749,14 @@ def get_angajati_proiecte_view():
             cursor.close()
             conn.close()
 
-@app.route('/api/team-leader/angajati-view', methods=['GET'])
-def get_angajati_team_leader_view():
+@app.route('/api/team-leader/angajati-view/<int:id_leader>', methods=['GET'])
+def get_angajati_team_leader_view(id_leader):
     try:
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
         
-        query = "SELECT * FROM view_angajati_team_leader"
-        cursor.execute(query)
+        query = "SELECT * FROM view_angajati_team_leader WHERE id_manager = %s"
+        cursor.execute(query, (id_leader,))
         
         date_echipa = cursor.fetchall()
         
@@ -765,7 +765,6 @@ def get_angajati_team_leader_view():
             "total_membri_echipa": len(date_echipa),
             "date_echipa": date_echipa
         }), 200
-
     except mysql.connector.Error as err:
         return jsonify({"status": "eroare_db", "detalii": str(err)}), 500
         

@@ -21,3 +21,8 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# environment variables - nu se pune pe git
+.env
+.env.local
+.env.production
