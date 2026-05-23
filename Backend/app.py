@@ -878,6 +878,7 @@ def get_istoric_concedii():
             FROM concedii c
             JOIN angajati a ON c.id_angajat = a.id_angajat
             ORDER BY c.data_start DESC
+            LIMIT 500
         """
         cursor.execute(query)
         istoric = cursor.fetchall()
@@ -1217,6 +1218,7 @@ def get_arhiva_evaluari():
             JOIN angajati a ON e.id_angajat = a.id_angajat
             LEFT JOIN angajati m ON e.id_evaluator = m.id_angajat
             ORDER BY e.data_evaluare DESC
+            LIMIT 500
         """
         cursor.execute(query)
         arhiva = cursor.fetchall()
@@ -1269,51 +1271,75 @@ def login():
     data = request.get_json()
     username = data.get('username')
     password = data.get('password')
-    
+
     try:
         conn = mysql.connector.connect(
-            user='root', 
-            password='', 
+            user='root',
+            password='',
             host=os.environ.get('DB_HOST', '127.0.0.1'),
-            database='my_database' 
+            database='my_database'
+        )
+        cursor = conn.cursor(dictionary=True)
+
+        # preia utilizatorul dupa username
+        cursor.execute("""
+            SELECT u.id_utilizator, u.username, u.parola_hash,
+                   u.rol, u.activ,
+                   a.nume, a.prenume
+            FROM utilizatori u
+            JOIN angajati a ON u.id_angajat = a.id_angajat
+            WHERE u.username = %s AND u.activ = 1
+        """, (username,))
+
+        user = cursor.fetchone()
+
+        if not user:
+            cursor.close()
+            conn.close()
+            return jsonify({"msg": "Username sau parola incorecte"}), 401
+
+        # verifica parola cu bcrypt
+        import bcrypt
+        parola_corecta = bcrypt.checkpw(
+            password.encode('utf-8'),
+            user['parola_hash'].encode('utf-8')
         )
 
-        cursor = conn.cursor()
-        
-        cursor.callproc('proc_login', [username, password])
-        
-        # Preluăm rezultatul returnat de procedură
-        user_data = None
-        for result in cursor.stored_results():
-            rows = result.fetchall()
-            if rows:
-                user_data = rows[0]
+        if not parola_corecta:
+            cursor.close()
+            conn.close()
+            return jsonify({"msg": "Username sau parola incorecte"}), 401
+
+        # actualizeaza ultima autentificare
+        cursor.execute("""
+            UPDATE utilizatori
+            SET ultima_autentificare = NOW()
+            WHERE id_utilizator = %s
+        """, (user['id_utilizator'],))
+        conn.commit()
 
         cursor.close()
         conn.close()
-        
-        if user_data:
-            id_utilizator = user_data[0]
-            username_db = user_data[1]
-            rol_utilizator = user_data[2]
-            
-            # Forțăm ID-ul să fie text (string) pentru a evita eroarea JWT
-            identity_str = str(id_utilizator)
-            
-            token = create_access_token(
-                identity=identity_str, 
-                additional_claims={"username": username_db, "rol": rol_utilizator}
-            )
-            
-            return jsonify({
-                "token": token, 
-                "success": True, 
-                "rol": rol_utilizator,
-                "username": username_db
-            }), 200
-        else:
-            return jsonify({"msg": "Date de logare incorecte sau cont inactiv"}), 401
-            
+
+        # genereaza token JWT
+        identity_str = str(user['id_utilizator'])
+        token = create_access_token(
+            identity=identity_str,
+            additional_claims={
+                "username": user['username'],
+                "rol": user['rol']
+            }
+        )
+
+        return jsonify({
+            "token": token,
+            "success": True,
+            "rol": user['rol'],
+            "username": user['username'],
+            "nume": user['nume'],
+            "prenume": user['prenume']
+        }), 200
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
