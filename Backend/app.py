@@ -755,7 +755,23 @@ def get_angajati_team_leader_view(id_leader):
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
         
-        query = "SELECT * FROM view_angajati_team_leader WHERE id_manager = %s"
+        query = """
+            SELECT 
+                a.id_angajat,
+                a.nume,
+                a.prenume,
+                a.email,
+                a.telefon,
+                a.salariu_curent,
+                a.data_angajare,
+                d.nume AS nume_departament,
+                p.titlu AS titlu_pozitie
+            FROM angajati a
+            JOIN manageri m ON a.id_manager = m.id_manager
+            JOIN departamente d ON a.id_departament = d.id_departament
+            JOIN pozitii p ON a.id_pozitie = p.id_pozitie
+            WHERE m.id_angajat = %s
+        """
         cursor.execute(query, (id_leader,))
         
         date_echipa = cursor.fetchall()
@@ -764,7 +780,8 @@ def get_angajati_team_leader_view(id_leader):
             "status": "succes",
             "total_membri_echipa": len(date_echipa),
             "date_echipa": date_echipa
-        }), 200
+        }), 200 
+
     except mysql.connector.Error as err:
         return jsonify({"status": "eroare_db", "detalii": str(err)}), 500
         
@@ -860,8 +877,11 @@ def dezactivare_cont():
 @app.route('/api/angajati/istoric-concedii', methods=['GET'])
 def get_istoric_concedii():
     try:
+        id_angajat = request.args.get('id_angajat')
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
+
+        params = []
         
         query = """
             SELECT 
@@ -877,16 +897,23 @@ def get_istoric_concedii():
                 c.status                
             FROM concedii c
             JOIN angajati a ON c.id_angajat = a.id_angajat
-            ORDER BY c.data_start DESC
+            WHERE 1=1
         """
-        cursor.execute(query)
+
+        if id_angajat:
+            query += " AND c.id_angajat = %s"
+            params.append(id_angajat)
+
+        query += " ORDER BY c.data_start DESC"
+
+        cursor.execute(query, tuple(params))
         istoric = cursor.fetchall()
         
         return jsonify({
             "status": "succes",
             "total_cereri": len(istoric),
             "date_concedii": istoric
-        }), 200
+        }), 200 
 
     except mysql.connector.Error as err:
         return jsonify({"status": "eroare_db", "detalii": str(err)}), 500
@@ -908,14 +935,14 @@ def adauga_concediu():
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
 
-        #Validare format dată
+        # Validare format dată
         start = datetime.strptime(data_start, '%Y-%m-%d')
         sfarsit = datetime.strptime(data_sfarsit, '%Y-%m-%d')
 
         if start > sfarsit:
             return jsonify({"status": "eroare", "mesaj": "Data de inceput nu poate fi dupa data de sfarsit."}), 400
 
-        #Validare, Angajatul nu trebuie să aibă alt concediu în această perioadă
+        # Validare: Angajatul nu trebuie să aibă alt concediu în această perioadă
         query_suprapunere = """
             SELECT id_concediu FROM concedii 
             WHERE id_angajat = %s AND status != 'respins'
@@ -926,14 +953,21 @@ def adauga_concediu():
         if cursor.fetchone():
             return jsonify({"status": "eroare", "mesaj": "Angajatul are deja un concediu programat in aceasta perioada."}), 400
 
-        #Inserare (cu status default 'in asteptare')
+        # Preluăm ID-ul managerului aprobator
+        cursor.execute("""
+            SELECT m.id_manager 
+            FROM manageri m
+            JOIN angajati a ON a.id_manager = m.id_manager
+            WHERE a.id_angajat = %s
+        """, (id_angajat,))
+        manager = cursor.fetchone()
+        id_aprobator = manager['id_manager'] if manager else None
+
+        # Inserare (cu status default 'in asteptare')
         query_insert = """
             INSERT INTO concedii (id_angajat, id_aprobator, tip, data_start, data_sfarsit, status)
             VALUES (%s, %s, %s, %s, %s, 'in asteptare')
         """
-        # Folosim un id_aprobator (ar trebui sa fie ID-ul managerului din tabelul manageri)
-        id_aprobator = date.get('id_aprobator', 1) 
-        
         cursor.execute(query_insert, (id_angajat, id_aprobator, tip_concediu, data_start, data_sfarsit))
         conn.commit()
 
@@ -944,7 +978,9 @@ def adauga_concediu():
     except mysql.connector.Error as err:
         return jsonify({"status": "eroare_db", "detalii": str(err)}), 500
     finally:
-        if 'conn' in locals(): conn.close()
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
 
 @app.route('/api/concedii', methods=['GET'])
 def get_concedii_in_asteptare():
@@ -1130,13 +1166,58 @@ def gestionare_proiecte():
         finally:
             conn.close()
 
+@app.route('/api/proiecte/<int:id_proiect>', methods=['GET'])
+def get_proiect(id_proiect):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM proiecte WHERE id_proiect = %s", (id_proiect,))
+        proiect = cursor.fetchone()
+        if not proiect:
+            return jsonify({"status": "eroare", "mesaj": "Proiectul nu a fost gasit."}), 404
+        return jsonify(proiect), 200
+    except mysql.connector.Error as err:
+        return jsonify({"status": "eroare_db", "detalii": str(err)}), 500
+    finally:
+        if 'conn' in locals(): conn.close()
+
+@app.route('/api/proiecte/ale-mele', methods=['GET'])
+@jwt_required()
+def get_proiectele_mele():
+    id_utilizator = get_jwt_identity()
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT id_angajat FROM utilizatori WHERE id_utilizator = %s", (id_utilizator,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({"error": "Angajat negasit"}), 404
+        id_angajat = row['id_angajat']
+        
+        query = """
+            SELECT p.id_proiect, p.nume, p.descriere, p.status,
+                   p.data_start, p.data_sfarsit, p.buget,
+                   ap.rol_proiect, ap.ore_alocate
+            FROM alocari_proiecte ap
+            JOIN proiecte p ON ap.id_proiect = p.id_proiect
+            WHERE ap.id_angajat = %s
+            ORDER BY p.data_start DESC
+        """
+        cursor.execute(query, (id_angajat,))
+        proiecte = cursor.fetchall()
+        return jsonify({"status": "succes", "proiecte": proiecte}), 200
+    except mysql.connector.Error as err:
+        return jsonify({"status": "eroare_db", "detalii": str(err)}), 500
+    finally:
+        if 'conn' in locals(): conn.close()
+
 @app.route('/api/angajati/beneficii', methods=['GET'])
 def get_beneficii_angajati():
     try:
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
         
-        # 🔥 Interogăm tabelele beneficii_angajati, beneficii și angajati folosind structura exactă furnizată
+        #Interogăm tabelele beneficii_angajati, beneficii și angajati
         query = """
             SELECT 
                 ba.id_angajat,
@@ -1239,6 +1320,7 @@ def get_arhiva_evaluari():
 def adauga_evaluare():
     date = request.get_json()
     id_angajat = date.get('id_angajat')
+    id_utilizator = date.get('id_utilizator')
     s_tehnic = int(date.get('scor_tehnic'))
     s_comunicare = int(date.get('scor_comunicare'))
     s_leadership = int(date.get('scor_leadership'))
@@ -1249,6 +1331,12 @@ def adauga_evaluare():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
+        cursor.execute("SELECT id_angajat FROM utilizatori WHERE id_utilizator = %s", (id_utilizator,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({"error": "Angajat negasit"}), 404
+        id_angajat = row['id_angajat']
+
         query = """
             INSERT INTO evaluari (id_angajat, id_evaluator, data_evaluare, 
                                  scor_tehnic, scor_comunicare, scor_leadership, 
@@ -1376,7 +1464,13 @@ def get_evaluari():
             user='root', password='', host='127.0.0.1', database='my_database'
         )
         cursor = conn.cursor(dictionary=True)
-        
+
+        cursor.execute("SELECT id_angajat FROM utilizatori WHERE id_utilizator = %s", (id_utilizator,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({"error": "Angajat negasit"}), 404
+        id_angajat = row['id_angajat']
+
         # Interogăm tabelul folosind ID-ul primit
         query = """
             SELECT data_evaluare, scor_tehnic, scor_comunicare, scor_leadership, scor_final, feedback
@@ -1384,7 +1478,7 @@ def get_evaluari():
             WHERE id_angajat = %s 
             ORDER BY data_evaluare DESC
         """
-        cursor.execute(query, (id_utilizator,))
+        cursor.execute(query, (id_angajat,))
         rezultate = cursor.fetchall()
         
         cursor.close()
@@ -1404,7 +1498,14 @@ def get_manageri():
         )
         cursor = conn.cursor(dictionary=True)
         
-        # Aflăm cine este managerul angajatului curent
+        #Obținem id_angajat real din JWT (care stochează id_utilizator)
+        cursor.execute("SELECT id_angajat FROM utilizatori WHERE id_utilizator = %s", (id_utilizator,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({"error": "Angajat negasit"}), 404
+        id_angajat = row['id_angajat']
+        
+        #Aflăm managerul angajatului
         query = """
             SELECT m.id_manager, a2.nume AS nume_manager, a2.prenume AS prenume_manager
             FROM angajati a1
@@ -1412,7 +1513,7 @@ def get_manageri():
             JOIN angajati a2 ON m.id_angajat = a2.id_angajat
             WHERE a1.id_angajat = %s
         """
-        cursor.execute(query, (id_utilizator,))
+        cursor.execute(query, (id_angajat,))
         manager_data = cursor.fetchone()
         
         cursor.close()
@@ -1434,7 +1535,13 @@ def get_istoric_salarial():
             user='root', password='', host='127.0.0.1', database='my_database'
         )
         cursor = conn.cursor(dictionary=True)
-        
+
+        cursor.execute("SELECT id_angajat FROM utilizatori WHERE id_utilizator = %s", (id_utilizator,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({"error": "Angajat negasit"}), 404
+        id_angajat = row['id_angajat']
+
         # Preluăm toate modificările salariale
         query = """
             SELECT data_modificare, salariu_vechi, salariu_nou, motiv
@@ -1442,7 +1549,7 @@ def get_istoric_salarial():
             WHERE id_angajat = %s 
             ORDER BY data_modificare DESC
         """
-        cursor.execute(query, (id_utilizator,))
+        cursor.execute(query, (id_angajat,))
         rezultate = cursor.fetchall()
         
         cursor.close()
@@ -1461,6 +1568,12 @@ def get_notificari():
             user='root', password='', host='127.0.0.1', database='my_database'
         )
         cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("SELECT id_angajat FROM utilizatori WHERE id_utilizator = %s", (id_utilizator,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({"error": "Angajat negasit"}), 404
+        id_angajat = row['id_angajat']
         
         # Preluăm notificările active pentru utilizatorul logat
         query = """
@@ -1469,7 +1582,7 @@ def get_notificari():
             WHERE id_angajat = %s 
             ORDER BY data_creare DESC
         """
-        cursor.execute(query, (id_utilizator,))
+        cursor.execute(query, (id_angajat,))
         rezultate = cursor.fetchall()
         
         cursor.close()
@@ -1565,7 +1678,7 @@ def get_ml_statistici():
 
         # distributia riscului per model
         cursor.execute("""
-            SELECT
+            SELECT 
                 'Random Forest' AS model,
                 SUM(CASE WHEN nivel_risc = 'Mare'  THEN 1 ELSE 0 END) AS mare,
                 SUM(CASE WHEN nivel_risc = 'Mediu' THEN 1 ELSE 0 END) AS mediu,
