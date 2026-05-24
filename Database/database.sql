@@ -1071,3 +1071,54 @@ SELECT `username`, 'parola123' AS `parola_valabila`
 FROM `utilizatori` 
 WHERE `parola_hash` = '$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31tK'
 LIMIT 1;
+
+-- inlocuieste parola cu 'test123' pentru un cont din fiecare rol
+-- bcrypt hash pentru 'test123'
+UPDATE utilizatori 
+SET parola_hash = '$2b$12$KIXsNpPFCuRcHDQTpDIBOeHGvMFpEqvLu5QXqKZ8mFhL3oWnRvGXm'
+WHERE rol = 'hr_specialist' LIMIT 1;
+
+UPDATE utilizatori 
+SET parola_hash = '$2b$12$KIXsNpPFCuRcHDQTpDIBOeHGvMFpEqvLu5QXqKZ8mFhL3oWnRvGXm'
+WHERE rol = 'hr_manager' LIMIT 1;
+
+UPDATE utilizatori 
+SET parola_hash = '$2b$12$KIXsNpPFCuRcHDQTpDIBOeHGvMFpEqvLu5QXqKZ8mFhL3oWnRvGXm'
+WHERE rol = 'team_leader' LIMIT 1;
+
+UPDATE utilizatori 
+SET parola_hash = '$2b$12$KIXsNpPFCuRcHDQTpDIBOeHGvMFpEqvLu5QXqKZ8mFhL3oWnRvGXm'
+WHERE rol = 'project_manager' LIMIT 1;
+
+UPDATE utilizatori 
+SET parola_hash = '$2b$12$KIXsNpPFCuRcHDQTpDIBOeHGvMFpEqvLu5QXqKZ8mFhL3oWnRvGXm'
+WHERE rol = 'director' LIMIT 1;
+
+UPDATE utilizatori 
+SET parola_hash = '$2b$12$KIXsNpPFCuRcHDQTpDIBOeHGvMFpEqvLu5QXqKZ8mFhL3oWnRvGXm'
+WHERE rol = 'ceo' LIMIT 1;
+
+UPDATE utilizatori 
+SET parola_hash = '$2b$12$KIXsNpPFCuRcHDQTpDIBOeHGvMFpEqvLu5QXqKZ8mFhL3oWnRvGXm'
+WHERE rol = 'app_readonly' LIMIT 1;
+
+SELECT 
+            u.id_utilizator,
+            u.username,
+            u.rol,
+            u.activ,
+            a.prenume,
+            a.nume,
+            d.nume AS departament
+        FROM utilizatori u
+        JOIN angajati a    ON u.id_angajat    = a.id_angajat
+        JOIN departamente d ON a.id_departament = d.id_departament
+        ORDER BY u.rol, u.username;
+      
+SELECT * FROM `departamente`;
+
+SELECT * FROM `utilizatori`;
+
+DELETE FROM `utilizatori`;
+
+USE `my_database`;
