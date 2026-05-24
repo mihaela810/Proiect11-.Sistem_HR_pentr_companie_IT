@@ -12,9 +12,9 @@ export function AuthProvider({ children }) {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
         setUser({
-          id:       payload.sub,
-          username: payload.username,
-          rol:      payload.rol,
+          id:       payload.sub,       // "42" — ID-ul utilizatorului
+          username: payload.username,  // din additional_claims
+          rol:      payload.rol,       // din additional_claims
         });
       } catch {
         localStorage.removeItem('token');

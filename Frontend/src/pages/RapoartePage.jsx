@@ -8,33 +8,61 @@ const roz  = '#ff22a1';
 const cyan = '#4ec9b0';
 
 export default function RapoartePage() {
-  const { user }        = useAuth();
-  const rol             = user?.rol || '';
+  const { user }    = useAuth();
+  const rol         = user?.rol || '';
 
-  const [departamente, setDepartamente]   = useState([]);
-  const [raport, setRaport]               = useState(null);
-  const [idSelectat, setIdSelectat]       = useState('');
-  const [istoricConcedii, setIstoric]     = useState([]);
-  const [arhivaEvaluari, setArhiva]       = useState([]);
-  const [loading, setLoading]             = useState(false);
-  const [loadingDept, setLoadingDept]     = useState(true);
-  const [tabActiv, setTabActiv]           = useState('salarii');
+  const [departamente, setDepartamente] = useState([]);
+  const [raport, setRaport]             = useState(null);
+  const [idSelectat, setIdSelectat]     = useState('');
+  const [istoricConcedii, setIstoric]   = useState([]);
+  const [arhivaEvaluari, setArhiva]     = useState([]);
+  const [loading, setLoading]           = useState(false);
+  const [loadingDept, setLoadingDept]   = useState(true);
+  const [loadingTab, setLoadingTab]     = useState(false);
+  const [eroareTab, setEroareTab]       = useState('');
+  const [tabActiv, setTabActiv]         = useState('salarii');
 
+  // incarcam departamentele la mount
   useEffect(() => {
     api.get(API.DEPARTAMENTE)
       .then(res => setDepartamente(res.data))
       .finally(() => setLoadingDept(false));
+  }, []);
 
-    if (['hr_manager', 'director', 'ceo'].includes(rol)) {
-      api.get(API.CONCEDII_ISTORIC)
-        .then(res => setIstoric(res.data.concedii || res.data || []))
-        .catch(() => {});
+  // incarcam datele tabului activ doar cand se schimba tabul
+  useEffect(() => {
+  if (tabActiv === 'salarii') return;
+  if (!['hr_manager', 'director', 'ceo'].includes(rol)) return;
 
-      api.get(API.EVALUARI_ARHIVA)
-        .then(res => setArhiva(res.data.evaluari || res.data || []))
-        .catch(() => {});
-    }
-  }, [rol]);
+  setLoadingTab(true);
+  setEroareTab('');
+
+  if (tabActiv === 'concedii') {
+    api.get(API.CONCEDII_ISTORIC)
+      .then(res => {
+        console.log('CONCEDII:', res.data);
+        setIstoric(res.data?.date_concedii || []);
+      })
+      .catch(err => {
+        console.log('EROARE CONCEDII:', err.response);
+        setEroareTab(err.response?.data?.detalii || 'Eroare la incarcare.');
+      })
+      .finally(() => setLoadingTab(false));
+  }
+
+  if (tabActiv === 'evaluari') {
+    api.get(API.EVALUARI_ARHIVA)
+      .then(res => {
+        console.log('EVALUARI:', res.data);
+        setArhiva(res.data?.date_evaluari || []);
+      })
+      .catch(err => {
+        console.log('EROARE EVALUARI:', err.response);
+        setEroareTab(err.response?.data?.detalii || 'Eroare la incarcare.');
+      })
+      .finally(() => setLoadingTab(false));
+  }
+}, [tabActiv, rol]);
 
   const handleRaport = async (e) => {
     e.preventDefault();
@@ -51,14 +79,52 @@ export default function RapoartePage() {
     }
   };
 
-  const formatRON  = (v) => v ? `${Number(v).toLocaleString('ro-RO')} RON` : '—';
-  const formatData = (d) => d ? new Date(d).toLocaleDateString('ro-RO') : '—';
+  const formatRON = (v) => v ? `${Number(v).toLocaleString('ro-RO')} RON` : '—';
 
   const taburi = [
-    { id: 'salarii',   label: 'RAPORT SALARII',      vizibil: poateFace(rol, 'salarii') },
-    { id: 'concedii',  label: 'ISTORIC CONCEDII',    vizibil: ['hr_manager', 'director', 'ceo'].includes(rol) },
-    { id: 'evaluari',  label: 'ARHIVA EVALUARI',     vizibil: ['hr_manager', 'director', 'ceo'].includes(rol) },
+    { id: 'salarii',  label: 'RAPORT SALARII',   vizibil: poateFace(rol, 'salarii') },
+    { id: 'concedii', label: 'ISTORIC CONCEDII',  vizibil: ['hr_manager', 'director', 'ceo'].includes(rol) },
+    { id: 'evaluari', label: 'ARHIVA EVALUARI',   vizibil: ['hr_manager', 'director', 'ceo'].includes(rol) },
   ].filter(t => t.vizibil);
+
+  const TabelGeneric = ({ date }) => {
+    if (!date || date.length === 0) return null;
+    return (
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+          <thead>
+            <tr style={{ borderBottom: `1px solid ${roz}` }}>
+              {Object.keys(date[0]).map(h => (
+                <th key={h} style={{
+                  textAlign: 'left', padding: '8px 12px',
+                  color: cyan, fontWeight: 'normal', whiteSpace: 'nowrap',
+                }}>
+                  {h.toUpperCase().replace(/_/g, ' ')}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {date.map((row, idx) => (
+              <tr key={idx} style={{
+                backgroundColor: idx % 2 === 0 ? '#1e1e1e' : '#252526',
+                borderBottom: '1px solid #2d2d2d',
+              }}>
+                {Object.values(row).map((val, i) => (
+                  <td key={i} style={{
+                    padding: '9px 12px', color: '#9cdcfe',
+                    verticalAlign: 'middle', whiteSpace: 'nowrap',
+                  }}>
+                    {val ?? '—'}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
 
   return (
     <div style={{ fontFamily: 'Consolas, monospace', maxWidth: '1000px' }}>
@@ -78,7 +144,7 @@ export default function RapoartePage() {
           {taburi.map(tab => (
             <button
               key={tab.id}
-              onClick={() => setTabActiv(tab.id)}
+              onClick={() => { setTabActiv(tab.id); setEroareTab(''); }}
               style={{
                 backgroundColor: tabActiv === tab.id ? '#2a2d2e' : 'transparent',
                 color: tabActiv === tab.id ? roz : '#555',
@@ -109,11 +175,17 @@ export default function RapoartePage() {
             <form onSubmit={handleRaport} style={{ display: 'flex', gap: '12px', alignItems: 'flex-end' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
                 <label style={{ color: cyan, fontSize: '11px' }}>SELECTEAZA DEPARTAMENT:</label>
-                <select value={idSelectat} onChange={e => setIdSelectat(e.target.value)}
-                  required style={selectStyle}>
+                <select
+                  value={idSelectat}
+                  onChange={e => setIdSelectat(e.target.value)}
+                  required
+                  style={selectStyle}
+                >
                   <option value="">-- selecteaza --</option>
                   {departamente.map(d => (
-                    <option key={d.id_departament} value={d.id_departament}>{d.nume}</option>
+                    <option key={d.id_departament} value={d.id_departament}>
+                      {d.locatie} — {d.nume}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -134,23 +206,23 @@ export default function RapoartePage() {
             <p style={{ color: roz, fontSize: '12px' }}>ERROR: {raport.eroare}</p>
           )}
 
-          {raport?.date_raport && (
+          {raport?.date_raport && raport.date_raport.length > 0 && (
             <>
               <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' }}>
                 {[
                   { label: 'TOTAL ANGAJATI', value: raport.date_raport.length },
                   {
                     label: 'SALARIU MEDIU',
-                    value: formatRON(
+                    value: `${Number(
                       raport.date_raport.reduce((s, r) => s + Number(r.salariu_curent || 0), 0) /
                       raport.date_raport.length
-                    )
+                    ).toLocaleString('ro-RO')} RON`
                   },
                   {
                     label: 'BUGET TOTAL',
-                    value: formatRON(
+                    value: `${Number(
                       raport.date_raport.reduce((s, r) => s + Number(r.salariu_curent || 0), 0)
-                    )
+                    ).toLocaleString('ro-RO')} RON`
                   },
                 ].map(({ label, value }) => (
                   <div key={label} style={{
@@ -163,40 +235,14 @@ export default function RapoartePage() {
                   </div>
                 ))}
               </div>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                  <thead>
-                    <tr style={{ borderBottom: `1px solid ${roz}` }}>
-                      {Object.keys(raport.date_raport[0]).map(h => (
-                        <th key={h} style={{
-                          textAlign: 'left', padding: '8px 12px',
-                          color: cyan, fontWeight: 'normal', whiteSpace: 'nowrap',
-                        }}>
-                          {h.toUpperCase().replace(/_/g, ' ')}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {raport.date_raport.map((row, idx) => (
-                      <tr key={idx} style={{
-                        backgroundColor: idx % 2 === 0 ? '#1e1e1e' : '#252526',
-                        borderBottom: '1px solid #2d2d2d',
-                      }}>
-                        {Object.values(row).map((val, i) => (
-                          <td key={i} style={{
-                            padding: '9px 12px', color: '#9cdcfe',
-                            verticalAlign: 'middle', whiteSpace: 'nowrap',
-                          }}>
-                            {val ?? '—'}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <TabelGeneric date={raport.date_raport} />
             </>
+          )}
+
+          {raport?.date_raport && raport.date_raport.length === 0 && (
+            <p style={{ color: '#808080', fontSize: '12px' }}>
+              Nu exista angajati in acest departament.
+            </p>
           )}
         </>
       )}
@@ -207,43 +253,12 @@ export default function RapoartePage() {
           <h3 style={{ color: cyan, fontSize: '13px', margin: '0 0 16px' }}>
             ISTORIC COMPLET CONCEDII ({istoricConcedii.length})
           </h3>
-          {istoricConcedii.length === 0 ? (
+          {loadingTab && <p style={{ color: '#808080' }}>SE_INCARCA...</p>}
+          {eroareTab && <p style={{ color: roz, fontSize: '12px' }}>ERROR: {eroareTab}</p>}
+          {!loadingTab && !eroareTab && istoricConcedii.length === 0 && (
             <p style={{ color: '#808080' }}>Nu exista date.</p>
-          ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                <thead>
-                  <tr style={{ borderBottom: `1px solid ${roz}` }}>
-                    {Object.keys(istoricConcedii[0]).map(h => (
-                      <th key={h} style={{
-                        textAlign: 'left', padding: '8px 12px',
-                        color: cyan, fontWeight: 'normal', whiteSpace: 'nowrap',
-                      }}>
-                        {h.toUpperCase().replace(/_/g, ' ')}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {istoricConcedii.map((row, idx) => (
-                    <tr key={idx} style={{
-                      backgroundColor: idx % 2 === 0 ? '#1e1e1e' : '#252526',
-                      borderBottom: '1px solid #2d2d2d',
-                    }}>
-                      {Object.values(row).map((val, i) => (
-                        <td key={i} style={{
-                          padding: '9px 12px', color: '#9cdcfe',
-                          verticalAlign: 'middle', whiteSpace: 'nowrap',
-                        }}>
-                          {val ?? '—'}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
           )}
+          {!loadingTab && <TabelGeneric date={istoricConcedii} />}
         </div>
       )}
 
@@ -253,43 +268,12 @@ export default function RapoartePage() {
           <h3 style={{ color: cyan, fontSize: '13px', margin: '0 0 16px' }}>
             ARHIVA EVALUARI ({arhivaEvaluari.length})
           </h3>
-          {arhivaEvaluari.length === 0 ? (
+          {loadingTab && <p style={{ color: '#808080' }}>SE_INCARCA...</p>}
+          {eroareTab && <p style={{ color: roz, fontSize: '12px' }}>ERROR: {eroareTab}</p>}
+          {!loadingTab && !eroareTab && arhivaEvaluari.length === 0 && (
             <p style={{ color: '#808080' }}>Nu exista date.</p>
-          ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                <thead>
-                  <tr style={{ borderBottom: `1px solid ${roz}` }}>
-                    {Object.keys(arhivaEvaluari[0]).map(h => (
-                      <th key={h} style={{
-                        textAlign: 'left', padding: '8px 12px',
-                        color: cyan, fontWeight: 'normal', whiteSpace: 'nowrap',
-                      }}>
-                        {h.toUpperCase().replace(/_/g, ' ')}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {arhivaEvaluari.map((row, idx) => (
-                    <tr key={idx} style={{
-                      backgroundColor: idx % 2 === 0 ? '#1e1e1e' : '#252526',
-                      borderBottom: '1px solid #2d2d2d',
-                    }}>
-                      {Object.values(row).map((val, i) => (
-                        <td key={i} style={{
-                          padding: '9px 12px', color: '#9cdcfe',
-                          verticalAlign: 'middle', whiteSpace: 'nowrap',
-                        }}>
-                          {val ?? '—'}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
           )}
+          {!loadingTab && <TabelGeneric date={arhivaEvaluari} />}
         </div>
       )}
     </div>

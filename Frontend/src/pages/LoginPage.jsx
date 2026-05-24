@@ -54,8 +54,8 @@ export default function LoginPage() {
         {/* logo + titlu */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '32px' }}>
           <img
-            src="/logo_B.png"
-            alt="logo_B"
+            src="/logo_empty.png"
+            alt="logo_empty"
             style={{ height: '64px', objectFit: 'contain', flexShrink: 0 }}
           />
           <div>
