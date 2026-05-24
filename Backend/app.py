@@ -7,6 +7,7 @@ import mysql.connector
 from datetime import datetime
 from flask import Flask, request, jsonify
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
+from functools import wraps
 
 app = Flask(__name__)
 CORS(app)
@@ -23,6 +24,36 @@ db_config = {
 
 def get_db_connection():
     return mysql.connector.connect(**db_config)
+
+def get_rol_si_locatie(identity):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT u.rol, d.locatie
+        FROM utilizatori u
+        JOIN angajati a ON u.id_angajat = a.id_angajat
+        JOIN departamente d ON a.id_departament = d.id_departament
+        WHERE u.id_utilizator = %s
+    """, (identity,))
+    result = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return result 
+
+def rol_required(*roluri_permise):
+    def decorator(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            identity = get_jwt_identity()
+            info = get_rol_si_locatie(identity)
+            if not info or info['rol'] not in roluri_permise:
+                return jsonify({
+                    "status": "eroare_acces",
+                    "mesaj": f"Acces interzis. Roluri permise: {', '.join(roluri_permise)}"
+                }), 403
+            return f(*args, **kwargs)
+        return wrapper
+    return decorator
 
 @app.route('/api/angajati', methods=['POST'])
 def adauga_angajat():
@@ -897,12 +928,7 @@ def get_istoric_concedii():
                 c.status                
             FROM concedii c
             JOIN angajati a ON c.id_angajat = a.id_angajat
-<<<<<<< HEAD
-            ORDER BY c.data_start DESC
-            LIMIT 500
-=======
             WHERE 1=1
->>>>>>> 3a654ed9e1269410a174994ff8c15dda5423b244
         """
 
         if id_angajat:
@@ -1890,7 +1916,7 @@ def sterge_alocare_proiect(id_alocare):
         }), 200
 
     except mysql.connector.Error as err:
-        return jsonify({"status": "eroare_db", "detalii": str(err)}), 500
+        return jsonify({"status": "eroare_db", "detalii": str(err)}), 500 
     finally:
         if 'conn' in locals() and conn.is_connected():
             cursor.close()
