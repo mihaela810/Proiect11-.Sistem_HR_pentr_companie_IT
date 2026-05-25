@@ -114,7 +114,7 @@ def adauga_angajat():
         conn.commit()
         return jsonify({"status": "succes", "mesaj": "Angajat salvat in baza de date!"}), 201
 
-    except mysql.connector.Error as err:
+    except mysql.connector.Error as err: 
         if err.errno == 1062:
             err_str = str(err).lower()
             if "email" in err_str:
@@ -941,6 +941,47 @@ def get_sinteza_departamente():
         if 'conn' in locals() and conn.is_connected():
             cursor.close(); conn.close()
 
+@app.route('/api/departamente/<int:id_departament>', methods=['GET'])
+@jwt_required()
+def get_departament(id_departament):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("""
+            SELECT d.*, 
+                   a.nume AS nume_manager, 
+                   a.prenume AS prenume_manager
+            FROM departamente d
+            LEFT JOIN manageri m ON d.id_manager = m.id_manager
+            LEFT JOIN angajati a ON m.id_angajat = a.id_angajat
+            WHERE d.id_departament = %s
+        """, (id_departament,))
+        departament = cursor.fetchone()
+
+        if not departament:
+            return jsonify({"status": "eroare", "mesaj": "Departamentul nu a fost gasit."}), 404
+
+        cursor.execute("""
+            SELECT a.id_angajat, a.nume, a.prenume, 
+                   a.email, p.titlu AS pozitie, a.status
+            FROM angajati a
+            JOIN pozitii p ON a.id_pozitie = p.id_pozitie
+            WHERE a.id_departament = %s
+            ORDER BY a.nume ASC
+        """, (id_departament,))
+        departament['angajati'] = cursor.fetchall()
+        departament['total_angajati'] = len(departament['angajati'])
+
+        return jsonify(departament), 200
+
+    except mysql.connector.Error as err:
+        return jsonify({"status": "eroare_db", "detalii": str(err)}), 500
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
+
 
 # ── POZITII ──────────────────────────────────────────────────────────────────
 
@@ -1028,7 +1069,6 @@ def gestionare_proiecte():
                 WHERE d.locatie = %s
             """, (info['locatie'],))
 
-        # ceo, hr_manager, project_manager: vad totul inclusiv buget
         else:
             cursor.execute("SELECT * FROM proiecte ORDER BY data_start DESC")
 
@@ -1146,7 +1186,6 @@ def adauga_alocare_proiect():
     finally:
         if 'conn' in locals() and conn.is_connected():
             cursor.close(); conn.close()
-
 
 @app.route('/api/alocari-proiecte/<int:id_alocare>', methods=['DELETE'])
 @jwt_required()
