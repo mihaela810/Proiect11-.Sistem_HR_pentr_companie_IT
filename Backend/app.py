@@ -148,7 +148,7 @@ def toti_angajatii():
     except mysql.connector.Error as err:
         return jsonify({"status": "eroare_db", "detalii": str(err)}), 500
     finally:
-        if 'conn' in locals() and conn.is_connected():
+        if 'conn' in locals() and conn.is_connected(): 
             cursor.close(); conn.close()
 
 
@@ -279,6 +279,8 @@ def get_profil_complet(id):
     try:
         conn   = get_db_connection()
         cursor = conn.cursor(dictionary=True)
+        
+        #Extragere date de bază profil
         cursor.execute("""
             SELECT a.*, d.nume as departament, p.titlu as functie,
                    p.salariu_min, p.salariu_max
@@ -288,9 +290,11 @@ def get_profil_complet(id):
             WHERE a.id_angajat = %s
         """, (id,))
         profil = cursor.fetchone()
+        
         if not profil:
             return jsonify({"status": "eroare", "mesaj": "Angajat negasit"}), 404
 
+        #Calcul Compa-Ratio (Analiză piață)
         salariu       = float(profil['salariu_curent'])
         medie         = (float(profil['salariu_min']) + float(profil['salariu_max'])) / 2
         compa_procent = (salariu / medie) * 100
@@ -302,25 +306,35 @@ def get_profil_complet(id):
         else:
             status_grila = "Peste grilă"
 
-        cursor.callproc('proc_calcul_salariu_net', [salariu])
-        salariu_net = None
+        #Calcul salarii prin procedura stocată
+        cursor.callproc('proc_calcul_salariu_net', [id])
+        
+        date_salariu = {}
         for result in cursor.stored_results():
             row = result.fetchone()
             if row:
-                salariu_net = list(row.values())[0] if isinstance(row, dict) else row[0]
+                date_salariu = row 
 
+        #Adăugăm obiectul de analiză a pieței în dicționarul profilului
         profil['analiza_piata'] = {
-            "compa_ratio":          f"{round(compa_procent, 2)}%",
-            "pozitie_grila":        status_grila,
-            "salariu_net_calculat": round(float(salariu_net), 2) if salariu_net else "Eroare calcul"
+            "compa_ratio": f"{round(compa_procent, 2)}%",
+            "pozitie_grila": status_grila,
+            "salariu_brut": date_salariu.get('salariu_brut'),
+            "retinere_cas": date_salariu.get('retinere_cas'),
+            "retinere_cass": date_salariu.get('retinere_cass'),
+            "retinere_impozit": date_salariu.get('retinere_impozit'),
+            "total_beneficii": date_salariu.get('total_beneficii'),
+            "salariu_net_calculat": date_salariu.get('salariu_net')
         }
 
         while cursor.nextset():
             pass
 
+        #Extragere istoric salarial
         cursor.execute("SELECT * FROM istoric_salarial WHERE id_angajat = %s ORDER BY data_modificare DESC", (id,))
         profil['istoric_salarii'] = cursor.fetchall()
 
+        #Extragere evaluări profesionale
         cursor.execute("""
             SELECT id_evaluare, id_evaluator, data_evaluare,
                    scor_tehnic, scor_comunicare, scor_leadership, scor_final, feedback
@@ -328,6 +342,7 @@ def get_profil_complet(id):
         """, (id,))
         profil['evaluari'] = cursor.fetchall()
 
+        #Extragere proiecte active
         cursor.execute("""
             SELECT DISTINCT p.nume, ap.rol_proiect, ap.ore_alocate
             FROM alocari_proiecte ap
@@ -337,10 +352,13 @@ def get_profil_complet(id):
         profil['proiecte'] = cursor.fetchall()
 
         return jsonify(profil), 200
+
     except mysql.connector.Error as err:
         return jsonify({"status": "eroare_db", "detalii": str(err)}), 500
+        
     finally:
-        if 'conn' in locals(): conn.close()
+        if 'conn' in locals(): 
+            conn.close()
 
 
 @app.route('/api/angajati/<int:id>', methods=['PUT'])
@@ -738,30 +756,66 @@ def get_istoric_concedii_avansat():
 @rol_required('team_leader', 'project_manager', 'hr_manager', 'ceo')
 def adauga_evaluare():
     date          = request.get_json()
+    id_angajat    = date.get('id_angajat')
     id_utilizator = date.get('id_utilizator')
+    id_evaluator  = date.get('id_evaluator')
     s_tehnic      = int(date.get('scor_tehnic'))
     s_comunicare  = int(date.get('scor_comunicare'))
     s_leadership  = int(date.get('scor_leadership'))
     scor_final    = (s_tehnic + s_comunicare + s_leadership) / 3
     try:
         conn   = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT id_angajat FROM utilizatori WHERE id_utilizator = %s", (id_utilizator,))
-        row = cursor.fetchone()
-        if not row:
-            return jsonify({"error": "Angajat negasit"}), 404
-        id_angajat = row[0]
+        cursor = conn.cursor(dictionary=True)
+
+        # daca s-a trimis id_utilizator, il convertim in id_angajat
+        if not id_angajat and id_utilizator:
+            cursor.execute(
+                "SELECT id_angajat FROM utilizatori WHERE id_utilizator = %s",
+                (id_utilizator,)
+            )
+            row = cursor.fetchone()
+            if not row:
+                return jsonify({"error": "Angajat negasit dupa id_utilizator"}), 404
+            id_angajat = row['id_angajat']
+
+        if not id_angajat:
+            return jsonify({"error": "Lipseste id_angajat sau id_utilizator"}), 400
+
+        # scorul final se calculeaza automat de triggerul din BD
+        # dar il calculam si noi ca fallback
+        scor_final = round((s_tehnic * 0.5 + s_comunicare * 0.3 + s_leadership * 0.2), 2)
+
         cursor.execute("""
-            INSERT INTO evaluari (id_angajat, id_evaluator, data_evaluare,
-                                  scor_tehnic, scor_comunicare, scor_leadership, scor_final, feedback)
+            INSERT INTO evaluari
+                (id_angajat, id_evaluator, data_evaluare,
+                 scor_tehnic, scor_comunicare, scor_leadership,
+                 scor_final, feedback)
             VALUES (%s, %s, CURDATE(), %s, %s, %s, %s, %s)
-        """, (id_angajat, date['id_evaluator'], s_tehnic, s_comunicare, s_leadership, scor_final, date.get('feedback')))
+        """, (
+            id_angajat,
+            id_evaluator,
+            s_tehnic,
+            s_comunicare,
+            s_leadership,
+            scor_final,
+            date.get('feedback', '')
+        ))
         conn.commit()
-        return jsonify({"status": "succes", "scor_generat": round(scor_final, 2)}), 201
-    except Exception as e:
-        return jsonify({"status": "eroare", "detalii": str(e)}), 400
+        return jsonify({
+            "status":       "succes",
+            "scor_generat": scor_final,
+            "id_evaluare":  cursor.lastrowid
+        }), 201
+
+    except mysql.connector.Error as err:
+        if err.sqlstate == '45000':
+            # eroare aruncata de trigger (ex: scoruri invalide)
+            return jsonify({"status": "eroare_logica", "mesaj": err.msg}), 400
+        return jsonify({"status": "eroare", "detalii": str(err)}), 500
     finally:
-        if 'conn' in locals(): conn.close()
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
 
 
 @app.route('/api/evaluari', methods=['GET'])
