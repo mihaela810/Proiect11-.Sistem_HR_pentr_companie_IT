@@ -1380,7 +1380,7 @@ def login():
 
         # preluam utilizatorul dupa username, doar daca e activ
         cursor.execute("""
-            SELECT u.id_utilizator, u.username, u.parola_hash, u.rol, u.activ,
+            SELECT u.id_utilizator, u.id_angajat, u.username, u.parola_hash, u.rol, u.activ,
                    a.nume, a.prenume
             FROM utilizatori u
             JOIN angajati a ON u.id_angajat = a.id_angajat
@@ -1409,10 +1409,15 @@ def login():
         cursor.close()
         conn.close()
 
-        # generam token JWT
+        additional_claims = {
+            'username': user['username'],
+            'rol': user['rol'],
+            'id_angajat': user['id_angajat'] 
+            }
+
         token = create_access_token(
             identity=str(user['id_utilizator']),
-            additional_claims={"username": user['username'], "rol": user['rol']}
+            additional_claims=additional_claims
         )
         return jsonify({
             "token":   token,
@@ -1429,7 +1434,6 @@ def login():
         if 'conn' in locals() and conn.is_connected():
             cursor.close()
             conn.close()
-
 
 @app.route('/api/utilizatori/profil-meu', methods=['GET'])
 @jwt_required()
@@ -1505,7 +1509,7 @@ def get_istoric_salarial():
         if 'conn' in locals(): conn.close()
 
 
-@app.route('/api/notificari', methods=['GET'])
+@app.route('/api/notificari', methods=['GET']) 
 @jwt_required()
 def get_notificari():
     id_utilizator = get_jwt_identity()
