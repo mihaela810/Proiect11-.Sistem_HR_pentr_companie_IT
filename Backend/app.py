@@ -738,30 +738,66 @@ def get_istoric_concedii_avansat():
 @rol_required('team_leader', 'project_manager', 'hr_manager', 'ceo')
 def adauga_evaluare():
     date          = request.get_json()
+    id_angajat    = date.get('id_angajat')
     id_utilizator = date.get('id_utilizator')
+    id_evaluator  = date.get('id_evaluator')
     s_tehnic      = int(date.get('scor_tehnic'))
     s_comunicare  = int(date.get('scor_comunicare'))
     s_leadership  = int(date.get('scor_leadership'))
     scor_final    = (s_tehnic + s_comunicare + s_leadership) / 3
     try:
         conn   = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT id_angajat FROM utilizatori WHERE id_utilizator = %s", (id_utilizator,))
-        row = cursor.fetchone()
-        if not row:
-            return jsonify({"error": "Angajat negasit"}), 404
-        id_angajat = row[0]
+        cursor = conn.cursor(dictionary=True)
+
+        # daca s-a trimis id_utilizator, il convertim in id_angajat
+        if not id_angajat and id_utilizator:
+            cursor.execute(
+                "SELECT id_angajat FROM utilizatori WHERE id_utilizator = %s",
+                (id_utilizator,)
+            )
+            row = cursor.fetchone()
+            if not row:
+                return jsonify({"error": "Angajat negasit dupa id_utilizator"}), 404
+            id_angajat = row['id_angajat']
+
+        if not id_angajat:
+            return jsonify({"error": "Lipseste id_angajat sau id_utilizator"}), 400
+
+        # scorul final se calculeaza automat de triggerul din BD
+        # dar il calculam si noi ca fallback
+        scor_final = round((s_tehnic * 0.5 + s_comunicare * 0.3 + s_leadership * 0.2), 2)
+
         cursor.execute("""
-            INSERT INTO evaluari (id_angajat, id_evaluator, data_evaluare,
-                                  scor_tehnic, scor_comunicare, scor_leadership, scor_final, feedback)
+            INSERT INTO evaluari
+                (id_angajat, id_evaluator, data_evaluare,
+                 scor_tehnic, scor_comunicare, scor_leadership,
+                 scor_final, feedback)
             VALUES (%s, %s, CURDATE(), %s, %s, %s, %s, %s)
-        """, (id_angajat, date['id_evaluator'], s_tehnic, s_comunicare, s_leadership, scor_final, date.get('feedback')))
+        """, (
+            id_angajat,
+            id_evaluator,
+            s_tehnic,
+            s_comunicare,
+            s_leadership,
+            scor_final,
+            date.get('feedback', '')
+        ))
         conn.commit()
-        return jsonify({"status": "succes", "scor_generat": round(scor_final, 2)}), 201
-    except Exception as e:
-        return jsonify({"status": "eroare", "detalii": str(e)}), 400
+        return jsonify({
+            "status":       "succes",
+            "scor_generat": scor_final,
+            "id_evaluare":  cursor.lastrowid
+        }), 201
+
+    except mysql.connector.Error as err:
+        if err.sqlstate == '45000':
+            # eroare aruncata de trigger (ex: scoruri invalide)
+            return jsonify({"status": "eroare_logica", "mesaj": err.msg}), 400
+        return jsonify({"status": "eroare", "detalii": str(err)}), 500
     finally:
-        if 'conn' in locals(): conn.close()
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
 
 
 @app.route('/api/evaluari', methods=['GET'])
