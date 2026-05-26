@@ -1710,6 +1710,163 @@ def get_audit_log():
         if 'conn' in locals() and conn.is_connected():
             cursor.close(); conn.close()
 
+
+# ── RUTE SPECIFICE DIRECTOR ───────────────────────────────────────────────────
+
+@app.route('/api/director/info', methods=['GET'])
+@jwt_required()
+def get_info_director():
+    """Returneaza orasul directorului logat"""
+    id_utilizator = get_jwt_identity()
+    try:
+        conn   = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT a.id_angajat, a.nume, a.prenume,
+                   d.locatie AS oras, d.nume AS departament
+            FROM utilizatori u
+            JOIN angajati a     ON u.id_angajat     = a.id_angajat
+            JOIN departamente d ON a.id_departament = d.id_departament
+            WHERE u.id_utilizator = %s
+        """, (id_utilizator,))
+        return jsonify(cursor.fetchone()), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if 'conn' in locals(): conn.close()
+
+
+@app.route('/api/director/angajati', methods=['GET'])
+@jwt_required()
+def get_angajati_director():
+    """Angajatii din orasul directorului logat"""
+    id_utilizator = get_jwt_identity()
+    try:
+        conn   = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        # gasim orasul directorului
+        cursor.execute("""
+            SELECT d.locatie FROM utilizatori u
+            JOIN angajati a     ON u.id_angajat     = a.id_angajat
+            JOIN departamente d ON a.id_departament = d.id_departament
+            WHERE u.id_utilizator = %s
+        """, (id_utilizator,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify([]), 200
+        oras = row['locatie']
+        cursor.execute("""
+            SELECT a.id_angajat, a.nume, a.prenume, a.email,
+                   a.salariu_curent, a.status, a.data_angajare,
+                   d.nume AS departament, d.locatie,
+                   p.titlu AS pozitie, p.nivel
+            FROM angajati a
+            JOIN departamente d ON a.id_departament = d.id_departament
+            JOIN pozitii p      ON a.id_pozitie     = p.id_pozitie
+            WHERE d.locatie = %s AND a.status = 'activ'
+            ORDER BY d.nume, a.nume
+        """, (oras,))
+        return jsonify(cursor.fetchall()), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if 'conn' in locals(): conn.close()
+
+
+@app.route('/api/director/departamente', methods=['GET'])
+@jwt_required()
+def get_departamente_director():
+    """Departamentele din orasul directorului logat"""
+    id_utilizator = get_jwt_identity()
+    try:
+        conn   = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT d2.locatie FROM utilizatori u
+            JOIN angajati a      ON u.id_angajat     = a.id_angajat
+            JOIN departamente d2 ON a.id_departament = d2.id_departament
+            WHERE u.id_utilizator = %s
+        """, (id_utilizator,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify([]), 200
+        oras = row['locatie']
+        cursor.execute("""
+            SELECT d.id_departament, d.nume, d.locatie,
+                   COUNT(a.id_angajat) AS nr_angajati
+            FROM departamente d
+            LEFT JOIN angajati a ON d.id_departament = a.id_departament
+                                AND a.status = 'activ'
+            WHERE d.locatie = %s
+            GROUP BY d.id_departament, d.nume, d.locatie
+            ORDER BY d.nume
+        """, (oras,))
+        return jsonify(cursor.fetchall()), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if 'conn' in locals(): conn.close()
+
+
+@app.route('/api/director/proiecte', methods=['GET'])
+@jwt_required()
+def get_proiecte_director():
+    """Proiectele cu angajati din orasul directorului"""
+    id_utilizator = get_jwt_identity()
+    try:
+        conn   = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT d.locatie FROM utilizatori u
+            JOIN angajati a     ON u.id_angajat     = a.id_angajat
+            JOIN departamente d ON a.id_departament = d.id_departament
+            WHERE u.id_utilizator = %s
+        """, (id_utilizator,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify([]), 200
+        oras = row['locatie']
+        cursor.execute("""
+            SELECT DISTINCT p.id_proiect, p.nume, p.descriere,
+                   p.status, p.data_start, p.data_sfarsit, p.buget
+            FROM proiecte p
+            JOIN alocari_proiecte ap ON p.id_proiect    = ap.id_proiect
+            JOIN angajati a          ON ap.id_angajat   = a.id_angajat
+            JOIN departamente d      ON a.id_departament = d.id_departament
+            WHERE d.locatie = %s
+            ORDER BY p.data_start DESC
+        """, (oras,))
+        return jsonify(cursor.fetchall()), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if 'conn' in locals(): conn.close()
+
+
+# ── RUTE SPECIFICE HR SPECIALIST ──────────────────────────────────────────────
+
+@app.route('/api/hr/departamente', methods=['GET'])
+@jwt_required()
+def get_departamente_hr_specialist():
+    """Toate departamentele — HR vede tot dar fara proiecte si beneficii"""
+    try:
+        conn   = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT d.id_departament, d.nume, d.locatie,
+                   COUNT(a.id_angajat) AS nr_angajati
+            FROM departamente d
+            LEFT JOIN angajati a ON d.id_departament = a.id_departament
+                                AND a.status = 'activ'
+            GROUP BY d.id_departament, d.nume, d.locatie
+            ORDER BY d.locatie, d.nume
+        """)
+        return jsonify(cursor.fetchall()), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if 'conn' in locals(): conn.close()
+
 print("--- RUTE DECOPERITE DE FLASK ---") 
 # ─────────────────────────────────────────────────────────────────────────────
 print("--- RUTE INREGISTRATE ---")
