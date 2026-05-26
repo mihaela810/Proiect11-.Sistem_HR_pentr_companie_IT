@@ -1100,10 +1100,25 @@ def get_proiect(id_proiect):
     try:
         conn   = get_db_connection()
         cursor = conn.cursor(dictionary=True)
+        
         cursor.execute("SELECT * FROM proiecte WHERE id_proiect = %s", (id_proiect,))
         proiect = cursor.fetchone()
         if not proiect:
             return jsonify({"status": "eroare", "mesaj": "Proiectul nu a fost gasit."}), 404
+
+        cursor.execute("""
+            SELECT a.id_angajat, a.nume, a.prenume, 
+                   p.titlu AS pozitie,
+                   ap.rol_proiect, ap.ore_alocate
+            FROM alocari_proiecte ap
+            JOIN angajati a ON ap.id_angajat = a.id_angajat
+            JOIN pozitii p ON a.id_pozitie = p.id_pozitie
+            WHERE ap.id_proiect = %s
+            ORDER BY a.nume ASC
+        """, (id_proiect,))
+        proiect['angajati'] = cursor.fetchall()
+        proiect['total_angajati'] = len(proiect['angajati'])
+
         return jsonify(proiect), 200
     except mysql.connector.Error as err:
         return jsonify({"status": "eroare_db", "detalii": str(err)}), 500
@@ -1681,7 +1696,7 @@ def get_ml_statistici():
 def get_audit_log():
     try:
         conn   = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor(dictionary=True) 
         cursor.execute("""
             SELECT id_log, tabel, id_inregistrare, actiune, coloana,
                    valoare_veche, valoare_noua, utilizator, data_actiune
