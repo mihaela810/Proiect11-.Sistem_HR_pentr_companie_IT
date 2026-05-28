@@ -14,7 +14,8 @@ export function AuthProvider({ children }) {
         setUser({
           id:       payload.sub,       // "42" — ID-ul utilizatorului
           username: payload.username,  // din additional_claims
-          rol:      payload.rol,       // din additional_claims
+          rol:      payload.rol, 
+          id_angajat: payload.id_angajat,      // din additional_claims
         });
       } catch {
         localStorage.removeItem('token');

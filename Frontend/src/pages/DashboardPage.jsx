@@ -10,7 +10,8 @@ const cyan = '#4ec9b0';
 
 function StatCard({ label, value, sub, culoare }) {
   return (
-    <div style={{
+    <div 
+    style={{
       backgroundColor: '#252526',
       border: '1px solid #333',
       borderLeft: `3px solid ${culoare || roz}`,
@@ -43,11 +44,18 @@ export default function DashboardPage() {
   const [eroare, setEroare]   = useState(null);
 
   useEffect(() => {
-    api.get(API.STATISTICI)
-      .then(res => setStats(res.data.date_statistice))
-      .catch(() => setEroare('Nu s-au putut incarca statisticile.'))
-      .finally(() => setLoading(false));
-  }, []);
+  api.get(API.STATISTICI)
+    .then(res => setStats(res.data.date_statistice))
+    .catch(err => {
+      if (err.response?.status === 403) {
+        setStats({});
+      } else {
+        setEroare('Nu s-au putut incarca statisticile.');
+      }
+    })
+    .finally(() => setLoading(false));
+}, []);
+
 
   const formatRON = (val) =>
     val ? `${Number(val).toLocaleString('ro-RO')} RON` : '—';
@@ -58,7 +66,7 @@ export default function DashboardPage() {
     { label: 'CONCEDII',      path: '/concedii',     vizibil: poateFace(rol, 'concedii')     },
     { label: 'EVALUARI',      path: '/evaluari',     vizibil: poateFace(rol, 'evaluari')     },
     { label: 'PROIECTE',      path: '/proiecte',     vizibil: poateFace(rol, 'proiecte')     },
-    { label: 'ECHIPA MEA',    path: '/echipa',       vizibil: poateFace(rol, 'view_echipa')  },
+      { label: 'ECHIPA MEA',    path: '/echipa',       vizibil: poateFace(rol, 'view_echipa')  },
     { label: 'RAPOARTE',      path: '/rapoarte',     vizibil: poateFace(rol, 'rapoarte')     },
     { label: 'ML COMPARATIE', path: '/ml',           vizibil: poateFace(rol, 'ml')           },
   ].filter(l => l.vizibil);
@@ -88,40 +96,50 @@ export default function DashboardPage() {
         <p style={{ color: roz, fontSize: '12px' }}>ERROR: {eroare}</p>
       )}
 
-      {!loading && !eroare && stats && (
-        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', marginBottom: '40px' }}>
-          <StatCard
-            label="TOTAL ANGAJATI ACTIVI"
-            value={stats.total_angajati}
-            sub="cu status activ"
-          />
-          <StatCard
-            label="SALARIU MEDIU"
-            value={poateFace(rol, 'salarii') ? formatRON(stats.salariu_mediu) : '***'}
-            sub="media pe angajati activi"
-            culoare={poateFace(rol, 'salarii') ? cyan : '#555'}
-          />
-          <StatCard
-            label="BUGET TOTAL SALARII"
-            value={poateFace(rol, 'salarii') ? formatRON(stats.buget_total_salarii) : '***'}
-            sub="suma lunara bruta"
-            culoare={poateFace(rol, 'salarii') ? '#f39c12' : '#555'}
-          />
-          <StatCard
-            label="SALARIU MAXIM"
-            value={poateFace(rol, 'salarii') ? formatRON(stats.salariu_maxim) : '***'}
-            sub="cel mai mare salariu"
-            culoare={poateFace(rol, 'salarii') ? '#6a9955' : '#555'}
-          />
-          <StatCard
-            label="SALARIU MINIM"
-            value={poateFace(rol, 'salarii') ? formatRON(stats.salariu_minim) : '***'}
-            sub="cel mai mic salariu"
-            culoare={poateFace(rol, 'salarii') ? '#6a9955' : '#555'}
-          />
-        </div>
-      )}
+      {!loading && !eroare && stats && Object.keys(stats).length === 0 && (
+        <div style={{ 
+          color: '#555', 
+          fontSize: '12px', 
+          marginBottom: '40px',
+          border: '1px solid #333',
+          padding: '16px',
+          borderRadius: '4px'
+        }}>
+      <span style={{ color: '#f39c12' }}></span> Nu aveti acces la statistici.
+    </div>
+  )}
 
+    {!loading && !eroare && stats && Object.keys(stats).length > 0 && (
+      <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', marginBottom: '40px' }}>
+        <StatCard
+          label="TOTAL ANGAJATI ACTIVI"
+          value={stats?.total_angajati}
+          sub="angajati cu status activ"
+        />
+        <StatCard
+          label="SALARIU MEDIU"
+          value={formatRON(stats?.salariu_mediu)}
+          sub="media pe toti angajatii activi"
+        />
+        <StatCard
+          label="BUGET TOTAL SALARII"
+          value={formatRON(stats?.buget_total_salarii)}
+          sub="suma lunara bruta"
+          culoare={cyan}
+        />
+        <StatCard
+          label="SALARIU MAXIM"
+          value={formatRON(stats?.salariu_maxim)}
+          sub="cel mai mare salariu activ"
+        />
+        <StatCard
+          label="SALARIU MINIM"
+          value={formatRON(stats?.salariu_minim)}
+          sub="cel mai mic salariu activ"
+        />
+      </div>
+    )}
+    
       {/* acces rapid */}
       {accesRapid.length > 0 && (
         <div>

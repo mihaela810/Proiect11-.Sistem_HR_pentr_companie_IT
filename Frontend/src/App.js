@@ -20,6 +20,9 @@ import EchipaPage         from './pages/EchipaPage';
 import RapoartePage       from './pages/RapoartePage';
 import AuditPage          from './pages/AuditPage';
 import HRViewPage         from './pages/HRViewPage';
+import DepartamentDetaliiPage from './pages/DepartamentDetaliiPage';
+import ProiectDetaliiPage from './pages/ProiectDetaliiPage';
+
 
 function App() {
   return (
@@ -57,6 +60,8 @@ function App() {
           <Route path="/rapoarte"               element={<RapoartePage />} />
           <Route path="/audit"                  element={<AuditPage />} />
           <Route path="/hr-view"                element={<HRViewPage />} />
+          <Route path="/departamente/:id" element={<DepartamentDetaliiPage />} />
+          <Route path="/proiecte/:id" element={<ProiectDetaliiPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

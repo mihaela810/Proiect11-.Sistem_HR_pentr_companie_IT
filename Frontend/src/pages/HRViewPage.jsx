@@ -12,7 +12,7 @@ export default function HRViewPage() {
 
   useEffect(() => {
     api.get(API.VIEW_HR)
-      .then(res => setAngajati(res.data.angajati || res.data || []))
+      .then(res => setAngajati(res.data.date_angajati || res.data || []))
       .catch(() => setEroare('Nu s-au putut incarca datele HR.'))
       .finally(() => setLoading(false));
   }, []);

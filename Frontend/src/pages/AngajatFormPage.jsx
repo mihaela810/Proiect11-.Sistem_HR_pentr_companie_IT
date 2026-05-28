@@ -43,26 +43,24 @@ export default function AngajatFormPage() {
 
     // Dacă este editare, încarcă datele angajatului existent
     if (esteEditare) {
-      setLoading(true);
-      api.get(`${API.ANGAJATI}/${id}`)
-        .then(res => {
-          if (res.data) {
-            setForm({
-              nume: res.data.nume || '',
-              prenume: res.data.prenume || '',
-              cnp: res.data.cnp || '',
-              email: res.data.email || '',
-              telefon: res.data.telefon || '',
-              an_angajare: res.data.an_angajare || '',
-              luna_angajare: res.data.luna_angajare || '',
-              id_departament: res.data.id_departament || '',
-              id_pozitie: res.data.id_pozitie || '',
-              salariu_curent: res.data.salariu_curent || '',
-            });
-          }
-        })
-        .catch(() => setErori(['Nu s-au putut incarca datele angajatului.']))
-        .finally(() => setLoading(false));
+      api.get(API.ANGAJAT_PROFIL(id)).then(res => {
+        const a = res.data;
+        const dataAngajare = new Date(a.data_angajare);
+        setForm({
+          nume:            a.nume           || '',
+          prenume:         a.prenume        || '',
+          cnp:             a.cnp            || '',
+          email:           a.email          || '',
+          telefon:         a.telefon        || '',
+          an_angajare:     dataAngajare.getFullYear() || '',
+          luna_angajare:   dataAngajare.getMonth() + 1 || '',
+          id_departament:  a.id_departament || '',
+          id_pozitie:      a.id_pozitie     || '',
+          salariu_curent:  a.salariu_curent || '',
+        });
+      }).catch(err => {
+        console.log('EROARE PROFIL:', err.response?.data);
+      });
     }
   }, [id, esteEditare]);
 

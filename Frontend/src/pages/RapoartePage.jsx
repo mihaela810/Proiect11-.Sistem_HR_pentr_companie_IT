@@ -197,7 +197,7 @@ export default function RapoartePage() {
                 fontSize: '12px', cursor: loading ? 'not-allowed' : 'pointer',
                 whiteSpace: 'nowrap',
               }}>
-                {loading ? 'SE_GENEREAZA...' : 'GENEREAZA_RAPORT()'}
+                {loading ? 'Se genereaza...' : 'GENEREAZA RAPORT'}
               </button>
             </form>
           </div>
@@ -253,7 +253,7 @@ export default function RapoartePage() {
           <h3 style={{ color: cyan, fontSize: '13px', margin: '0 0 16px' }}>
             ISTORIC COMPLET CONCEDII ({istoricConcedii.length})
           </h3>
-          {loadingTab && <p style={{ color: '#808080' }}>SE_INCARCA...</p>}
+          {loadingTab && <p style={{ color: '#808080' }}>Se incarca...</p>}
           {eroareTab && <p style={{ color: roz, fontSize: '12px' }}>ERROR: {eroareTab}</p>}
           {!loadingTab && !eroareTab && istoricConcedii.length === 0 && (
             <p style={{ color: '#808080' }}>Nu exista date.</p>
@@ -268,7 +268,7 @@ export default function RapoartePage() {
           <h3 style={{ color: cyan, fontSize: '13px', margin: '0 0 16px' }}>
             ARHIVA EVALUARI ({arhivaEvaluari.length})
           </h3>
-          {loadingTab && <p style={{ color: '#808080' }}>SE_INCARCA...</p>}
+          {loadingTab && <p style={{ color: '#808080' }}>Se incarca...</p>}
           {eroareTab && <p style={{ color: roz, fontSize: '12px' }}>ERROR: {eroareTab}</p>}
           {!loadingTab && !eroareTab && arhivaEvaluari.length === 0 && (
             <p style={{ color: '#808080' }}>Nu exista date.</p>

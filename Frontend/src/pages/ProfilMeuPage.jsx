@@ -27,14 +27,31 @@ function InfoRow({ label, value }) {
   );
 }
 
+function ScorBadge({ scor }) {
+  const val = Number(scor);
+  const culoare = val >= 7.5 ? '#6a9955' : val >= 5 ? '#dcdcaa' : roz;
+  return (
+    <span style={{
+      color: culoare,
+      fontWeight: 'bold',
+      fontFamily: 'Consolas, monospace',
+    }}>
+      {val.toFixed(2)}
+    </span>
+  );
+}
+
 export default function ProfilMeuPage() {
   const { user } = useAuth();
   const permisiuni = getRolPermisiuni(user?.rol);
+  const rol        = user?.rol || '';
 
   const [evaluari, setEvaluari]           = useState([]);
+  const [evaluariFacute, setEvaluariFacute] = useState([]);
   const [manager, setManager]             = useState(null);
   const [istoricSalarial, setIstoric]     = useState([]);
   const [notificari, setNotificari]       = useState([]);
+  const [directorInfo,   setDirectorInfo]   = useState(null);
   const [loading, setLoading]             = useState(true);
 
   useEffect(() => {
@@ -43,13 +60,20 @@ export default function ProfilMeuPage() {
       api.get(API.MEU_MANAGER).catch(() => ({ data: null })),
       api.get(API.MEU_ISTORIC_SALARIAL).catch(() => ({ data: [] })),
       api.get(API.MEU_NOTIFICARI).catch(() => ({ data: [] })),
+      api.get(API.MEU_EVALUARI_FACUTE).catch(() => ({ data: [] })),
     ];
 
-    Promise.all(cereri).then(([resEval, resMgr, resIstoric, resNotif]) => {
+    if (rol === 'director') {
+      cereri.push(api.get(API.DIRECTOR_INFO).catch(() => ({ data: null })));
+    }
+
+    Promise.all(cereri).then(([resEval, resMgr, resIstoric, resNotif, resEvalFacute, resDir]) => {
       setEvaluari(Array.isArray(resEval.data) ? resEval.data : []);
       setManager(resMgr.data || null);
       setIstoric(Array.isArray(resIstoric.data) ? resIstoric.data : []);
       setNotificari(Array.isArray(resNotif.data) ? resNotif.data : []);
+      setEvaluariFacute(Array.isArray(resEvalFacute.data) ? resEvalFacute.data : []);
+      if (resDir) setDirectorInfo(resDir.data || null);
       setLoading(false);
     });
   }, []);
@@ -84,6 +108,14 @@ export default function ProfilMeuPage() {
           <span style={{ color: '#6a9955', fontSize: '12px' }}>
             ID utilizator: {user?.id}
           </span>
+          {rol === 'director' && directorInfo?.oras && (
+            <span style={{
+              color: cyan, border: `1px solid ${cyan}`,
+              padding: '2px 10px', fontSize: '11px',
+            }}>
+              📍 {directorInfo.oras}
+            </span>
+          )}
           {nrNotifNecitite > 0 && (
             <span style={{
               color: '#1e1e1e',
@@ -97,6 +129,22 @@ export default function ProfilMeuPage() {
           )}
         </div>
       </div>
+
+       {/* sectiune speciala director: info oras */}
+      {rol === 'director' && directorInfo && (
+        <Sectiune titlu="ZONA MEA DE RESPONSABILITATE">
+          <InfoRow label="Oras coordonat" value={directorInfo.oras} />
+          <InfoRow label="Departament propriu" value={directorInfo.departament} />
+          <div style={{
+            marginTop: '12px', padding: '12px 16px',
+            backgroundColor: '#1e1e1e', border: `1px solid ${cyan}`,
+            borderLeft: `3px solid ${cyan}`, fontSize: '12px', color: '#808080',
+          }}>
+            Ca director, vizualizezi doar angajatii, departamentele si proiectele
+            din orasul <span style={{ color: cyan }}>{directorInfo.oras}</span>.
+          </div>
+        </Sectiune>
+      )}
 
       {/* manager */}
       <Sectiune titlu="MANAGERUL MEU">
@@ -180,7 +228,56 @@ export default function ProfilMeuPage() {
         )}
       </Sectiune>
 
+      {/* evaluarile facute de mine */}
+      <Sectiune titlu={`EVALUARILE MELE — FACUTE DE MINE (${evaluariFacute.length})`}>
+        {evaluariFacute.length === 0 ? (
+          <p style={{ color: '#808080', fontSize: '12px' }}>
+            Nu ai evaluat niciun angajat inca.
+          </p>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${roz}` }}>
+                  {['ANGAJAT', 'DEPARTAMENT', 'DATA', 'TEHNIC', 'COMUNICARE', 'LEADERSHIP', 'SCOR FINAL', 'FEEDBACK'].map(h => (
+                    <th key={h} style={{
+                      textAlign: 'left', padding: '6px 10px',
+                      color: cyan, fontWeight: 'normal',
+                      whiteSpace: 'nowrap',
+                    }}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {evaluariFacute.map((e, i) => (
+                  <tr key={i} style={{
+                    borderBottom: '1px solid #2d2d2d',
+                    backgroundColor: i % 2 === 0 ? 'transparent' : '#1e1e1e',
+                  }}>
+                    <td style={{ ...tdStyle, color: '#d4d4d4', whiteSpace: 'nowrap' }}>
+                      {e.prenume_angajat} {e.nume_angajat}
+                    </td>
+                    <td style={{ ...tdStyle, color: '#808080' }}>{e.departament}</td>
+                    <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>{formatData(e.data_evaluare)}</td>
+                    <td style={tdStyle}>{e.scor_tehnic}</td>
+                    <td style={tdStyle}>{e.scor_comunicare}</td>
+                    <td style={tdStyle}>{e.scor_leadership}</td>
+                    <td style={tdStyle}><ScorBadge scor={e.scor_final} /></td>
+                    <td style={{ ...tdStyle, color: '#808080', maxWidth: '200px' }}>
+                      {e.feedback || '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Sectiune>
+
       {/* istoric salarial */}
+      {rol !== 'hr_specialist' && (
       <Sectiune titlu={`ISTORIC SALARIAL (${istoricSalarial.length})`}>
         {istoricSalarial.length === 0 ? (
           <p style={{ color: '#808080', fontSize: '12px' }}>
@@ -216,7 +313,11 @@ export default function ProfilMeuPage() {
             </tbody>
           </table>
         )}
-      </Sectiune>
+      </Sectiune> )}
+
+      <Sectiune titlu="EDITEAZA PROFILUL MEU">
+  <EditareProfil />
+</Sectiune>
 
       {/* schimbare parola */}
       <Sectiune titlu="SCHIMBARE PAROLA">
@@ -313,6 +414,99 @@ function SchimbareParola({ idAngajat }) {
         {loading ? 'Se salveaza...' : 'SCHIMBA PAROLA'}
       </button>
     </form>
+  );
+}
+
+function EditareProfil() {
+  const cyan = '#4ec9b0';
+  const roz  = '#ff22a1';
+  const [form, setForm]       = useState({ nume: '', prenume: '', email: '', telefon: '' });
+  const [mesaj, setMesaj]     = useState('');
+  const [loading, setLoading] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+
+  const handleChange = (e) => setForm(p => ({ ...p, [e.target.name]: e.target.value }));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setMesaj('');
+    setLoading(true);
+    try {
+      await api.put(API.PROFIL_MEU_UPDATE, form);
+      setMesaj('Profilul a fost actualizat cu succes!');
+      setShowForm(false);
+    } catch (err) {
+      const data = err.response?.data;
+      setMesaj(`ERROR: ${data?.mesaj || 'Eroare la actualizarea profilului.'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div>
+      <button
+        onClick={() => { setShowForm(!showForm); setMesaj(''); }}
+        style={{
+          backgroundColor: 'transparent', color: showForm ? '#808080' : roz,
+          border: `1px solid ${showForm ? '#808080' : roz}`,
+          padding: '8px 16px', fontFamily: 'Consolas, monospace',
+          fontSize: '12px', cursor: 'pointer', marginBottom: '16px',
+        }}>
+        {showForm ? 'ANULEAZA' : 'EDITEAZA PROFIL'}
+      </button>
+
+      {showForm && (
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px', maxWidth: '400px' }}>
+          {[
+            { name: 'nume',     label: 'NUME' },
+            { name: 'prenume',  label: 'PRENUME' },
+            { name: 'email',    label: 'EMAIL' },
+            { name: 'telefon',  label: 'TELEFON' },
+          ].map(({ name, label }) => (
+            <div key={name} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <label style={{ color: cyan, fontSize: '11px' }}>{label}:</label>
+              <input
+                type="text"
+                name={name}
+                value={form[name]}
+                onChange={handleChange}
+                style={{
+                  backgroundColor: '#3c3c3c', color: 'white',
+                  border: '1px solid #555', padding: '8px 12px',
+                  fontFamily: 'Consolas, monospace', fontSize: '13px',
+                  outline: 'none', width: '100%', boxSizing: 'border-box',
+                }}
+              />
+            </div>
+          ))}
+
+          {mesaj && (
+            <p style={{
+              color: mesaj.startsWith('ERROR') ? roz : '#6a9955',
+              fontSize: '12px', margin: 0,
+            }}>
+              {mesaj}
+            </p>
+          )}
+
+          <button type="submit" disabled={loading} style={{
+            backgroundColor: 'transparent',
+            color: loading ? '#555' : roz,
+            border: `2px solid ${loading ? '#555' : roz}`,
+            padding: '10px 24px', fontFamily: 'Consolas, monospace',
+            fontSize: '13px', cursor: loading ? 'not-allowed' : 'pointer',
+            alignSelf: 'flex-start',
+          }}>
+            {loading ? 'Se salveaza...' : 'SALVEAZA'}
+          </button>
+        </form>
+      )}
+
+      {!showForm && mesaj && (
+        <p style={{ color: '#6a9955', fontSize: '12px' }}>{mesaj}</p>
+      )}
+    </div>
   );
 }
 

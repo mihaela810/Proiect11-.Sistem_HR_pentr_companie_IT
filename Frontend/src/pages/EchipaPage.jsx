@@ -64,7 +64,8 @@ export default function EchipaPage() {
   useEffect(() => {
     const cereri = [];
 
-    if (rol === 'team_leader') {
+    // Ambele roluri trebuie să poată vizualiza membrii asociați structurii lor
+    if (['team_leader', 'project_manager'].includes(rol)) {
       cereri.push(
         api.get(API.VIEW_TEAM_LEADER)
           .then(res => setEchipa(res.data.date_echipa || res.data || []))
@@ -99,7 +100,7 @@ export default function EchipaPage() {
         </p>
       </div>
 
-      {rol === 'team_leader' && (
+      {['team_leader', 'project_manager'].includes(rol) && (
         <TabelGeneric
           date={echipa}
           titlu={`MEMBRII ECHIPEI (${echipa.length})`}

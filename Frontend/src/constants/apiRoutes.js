@@ -12,6 +12,7 @@ const API = {
   ANGAJAT_MARIRE:           '/angajati/marire',
   ANGAJAT_DEZACTIVARE:      '/angajati/dezactivare',
   ANGAJAT_SCHIMBARE_PAROLA: '/angajati/schimbare-parola',
+  ANGAJATI_FILTRARE:        '/angajati/filtrare',
 
 
   // actiuni pe angajat (proceduri stocate)
@@ -31,12 +32,14 @@ const API = {
   // departamente
   DEPARTAMENTE:       '/departamente',
   DEPARTAMENT_RAPORT:       (id) => `/statistici/departament/${id}`,
+  DEPARTAMENT_DETALII: (id) => `/departamente/${id}`,
 
   // pozitii
   POZITII:            '/pozitii',
 
   // proiecte
   PROIECTE:           '/proiecte',
+  PROIECT_DETALII: (id) => `/proiecte/${id}`,
 
   // beneficii
   BENEFICII:          '/beneficii',
@@ -58,9 +61,21 @@ const API = {
   MEU_MANAGER:              '/manageri',
   MEU_ISTORIC_SALARIAL:     '/istoric-salarial',
   MEU_NOTIFICARI:           '/notificari',
+  MEU_EVALUARI_FACUTE: '/api/evaluari',
 
   AUDIT_LOG: '/audit-log',
 
+  PROFIL_MEU_UPDATE: '/angajati/profil-meu',
+
+  // Director
+  DIRECTOR_INFO:          '/api/director/info',
+  DIRECTOR_ANGAJATI:      '/api/director/angajati',
+  DIRECTOR_DEPARTAMENTE:  '/api/director/departamente',
+  DIRECTOR_PROIECTE:      '/api/director/proiecte',
+  DIRECTOR_ARHIVA:        '/api/director/arhiva',
+
+// HR Specialist
+  HR_DEPARTAMENTE:        '/api/hr/departamente',
 
   // predictie
   ML_COMPARATIE:   '/ml/comparatie',

@@ -113,11 +113,20 @@ export default function AngajatProfilPage() {
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           {poateFace(rol, 'salarii') && (
             <button
-              onClick={() => { setShowMarire(!showMarire); setMesajMarire(''); }}
-              style={btnStyle('#6a9955')}
-            >
-              {showMarire ? 'ANULEAZA' : 'MARIRE SALARIU'}
-            </button>
+            onClick={() => {
+              if (profil.status === 'inactiv') return;
+                setShowMarire(!showMarire);
+                setMesajMarire('');
+            }}
+        style={{
+          ...btnStyle(profil.status === 'inactiv' ? '#555' : '#6a9955'),
+          cursor: profil.status === 'inactiv' ? 'not-allowed' : 'pointer',
+          opacity: profil.status === 'inactiv' ? 0.5 : 1,
+        }}
+        title={profil.status === 'inactiv' ? 'Angajat inactiv — marire indisponibila' : ''}
+      >
+        {showMarire ? 'ANULEAZA' : 'MARIRE SALARIU'}
+      </button>
           )}
           {!poateFace(rol, 'readonly') && (
             <button
@@ -190,7 +199,7 @@ export default function AngajatProfilPage() {
               ...btnStyle('#6a9955'), alignSelf: 'flex-start',
               padding: '10px 24px', border: `2px solid #6a9955`,
             }}>
-              {loadingMarire ? 'SE_APLICA...' : 'APLICA_MARIRE()'}
+              {loadingMarire ? 'Se aplica...' : 'APLICA MARIRE'}
             </button>
           </form>
         </div>

@@ -13,13 +13,71 @@ const statusCuloare = {
   'respins':      '#ff22a1',
 };
 
+// Declaram stilurile chiar la inceput pentru a fi accesibile peste tot in fisier fara erori de tip ReferenceError
+const selectStyle = {
+  backgroundColor: '#3c3c3c',
+  color: 'white',
+  border: '1px solid #555',
+  padding: '8px 12px',
+  fontFamily: 'Consolas, monospace',
+  fontSize: '13px',
+  outline: 'none',
+};
+
+const inputStyle = {
+  backgroundColor: '#3c3c3c',
+  color: 'white',
+  border: '1px solid #555',
+  padding: '8px 12px',
+  fontFamily: 'Consolas, monospace',
+  fontSize: '13px',
+  outline: 'none',
+};
+
+const thStyle = {
+  padding: '12px',
+  color: '#d4d4d4',
+  fontWeight: 'bold',
+  borderBottom: '2px solid #333',
+  textAlign: 'left'
+};
+
+const tdStyle = {
+  padding: '12px',
+  color: '#9cdcfe',
+  verticalAlign: 'middle',
+  whiteSpace: 'nowrap',
+};
+
+const btnStyle = (culoare) => ({
+  backgroundColor: 'transparent',
+  color: culoare,
+  border: `1px solid ${culoare}`,
+  padding: '8px 16px',
+  fontFamily: 'Consolas, monospace',
+  fontSize: '12px',
+  cursor: 'pointer',
+  letterSpacing: '0.5px',
+  whiteSpace: 'nowrap',
+});
+
 export default function ConcediiPage() {
-  const [concedii, setConcedii]   = useState([]);
-  const [angajati, setAngajati]   = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [erori, setErori]         = useState([]);
-  const [succes, setSucces]       = useState('');
-  const [showForm, setShowForm]   = useState(false);
+  const [concedii, setConcedii]         = useState([]);
+  const [angajati, setAngajati]         = useState([]);
+  const [departamente, setDepartamente] = useState([]);
+  const [istoric, setIstoric]           = useState([]);
+  
+  const [loading, setLoading]                 = useState(true);
+  const [loadingIstoric, setLoadingIstoric]   = useState(false);
+  const [erori, setErori]                     = useState([]);
+  const [succes, setSucces]                   = useState('');
+  const [showForm, setShowForm]               = useState(false);
+  const [tabActiv, setTabActiv]               = useState('cereri');
+
+  // Filtre pentru istoric
+  const [filtruAngajat, setFiltruAngajat] = useState('');
+  const [filtruDept, setFiltruDept]       = useState('');
+  const [filtruManager, setFiltruManager] = useState('');
 
   const [form, setForm] = useState({
     id_angajat:   '',
@@ -29,93 +87,74 @@ export default function ConcediiPage() {
     id_aprobator: 1,
   });
 
-  useEffect(() => {
-    fetchConcedii();
-    // Securizăm preluarea angajaților în caz că backend-ul returnează alt format
-    api.get(API.ANGAJATI)
-      .then(res => {
-        if (Array.isArray(res.data)) {
-          setAngajati(res.data);
-        } else if (res.data && Array.isArray(res.data.date)) {
-          setAngajati(res.data.date);
-        }
-      })
-      .catch(() => console.error("Nu s-au putut incarca angajatii pentru dropdown."));
-  }, []);
-
   const fetchConcedii = () => {
     setLoading(true);
     api.get(API.CONCEDII)
-      .then(res => {
-        // Ne asigurăm că setăm un array valid
-        if (Array.isArray(res.data)) {
-          setConcedii(res.data);
-        } else {
-          setConcedii([]);
-        }
-      })
-      .catch(() => setErori(['Nu s-au putut incarca concediile.']))
+      .then(res => setConcedii(res.data))
+      .catch(() => setErori(['Nu s-au putut incarca cererile active.']))
       .finally(() => setLoading(false));
   };
 
-  const handleChange = (e) => {
-    setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  const fetchIstoric = () => {
+    setLoadingIstoric(true);
+    // Construim parametrii de filtrare
+    const params = {};
+    if (filtruAngajat) params.id_angajat = filtruAngajat;
+    if (filtruDept) params.id_departament = filtruDept;
+
+    api.get('/api/concedii/istoric', { params })
+      .then(res => setIstoric(res.data.date || res.data || []))
+      .catch(() => setErori(['Eroare la incarcarea istoricului.']))
+      .finally(() => setLoadingIstoric(false));
   };
 
-  const handleSubmit = async (e) => {
+  useEffect(() => {
+    fetchConcedii();
+    api.get(API.ANGAJATI).then(res => setAngajati(res.data)).catch(() => {});
+    api.get('/api/departamente').then(res => setDepartamente(res.data)).catch(() => {});
+  }, []);
+
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = (e) => {
     e.preventDefault();
     setErori([]);
     setSucces('');
-
-    if (!form.id_angajat) {
-      setErori(['Te rugam sa selectezi un angajat!']);
-      return;
-    }
-
-    if (new Date(form.data_start) > new Date(form.data_sfarsit)) {
-      setErori(['Data de inceput nu poate fi dupa data de sfarsit!']);
-      return;
-    }
-
-    // Convertim ID-urile în numere int pentru a corespunde cu app.py/MySQL
-    const dateTrimise = {
-      id_angajat: parseInt(form.id_angajat, 10),
-      tip: form.tip,
-      data_start: form.data_start,
-      data_sfarsit: form.data_sfarsit,
-      id_aprobator: parseInt(form.id_aprobator, 10)
-    };
-
-    try {
-      await api.post(API.CONCEDII, dateTrimise);
-      setSucces('Cererea de concediu a fost trimisa!');
-      setForm({ id_angajat: '', tip: 'odihna', data_start: '', data_sfarsit: '', id_aprobator: 1 });
-      setShowForm(false);
-      fetchConcedii();
-    } catch (err) {
-      setErori([err.response?.data?.detalii || 'Eroare la salvarea cererii de concediu.']);
-    }
+    
+    api.post(API.CONCEDII, form)
+      .then(() => {
+        setSucces('Cererea de concediu a fost trimisa cu succes!');
+        setForm({ id_angajat: '', tip: 'odihna', data_start: '', data_sfarsit: '', id_aprobator: 1 });
+        setShowForm(false);
+        fetchConcedii();
+      })
+      .catch(err => {
+        const msg = err.response?.data?.mesaj || 'Eroare la salvarea cererii.';
+        setErori([msg]);
+      });
   };
 
-  const handleDecizie = async (idConcediu, statusNou, idManager) => {
+  const handleDecizie = (idConcediu, statusNou, idManager) => {
     setErori([]);
     setSucces('');
-    try {
-      await api.put(`${API.CONCEDII}/${idConcediu}/decizie`, {
-        status: statusNou,
-        id_manager: parseInt(idManager, 10),
+    
+    api.put(`/api/concedii/${idConcediu}`, { status: statusNou, id_aprobator: idManager })
+      .then(() => {
+        setSucces(`Cererea a fost ${statusNou}a cu succes!`);
+        fetchConcedii();
+        if (tabActiv === 'istoric') fetchIstoric();
+      })
+      .catch(err => {
+        setErori([err.response?.data?.mesaj || 'Nu s-a putut procesa decizia.']);
       });
-      setSucces(`Cererea a fost ${statusNou}a cu succes!`);
-      fetchConcedii();
-    } catch (err) {
-      setErori([err.response?.data?.detalii || 'Nu s-a putut procesa decizia.']);
-    }
   };
 
   return (
     <div style={{ padding: '24px', fontFamily: 'Consolas, monospace', color: '#d4d4d4', backgroundColor: '#1e1e1e', minHeight: '100vh' }}>
       
-      {/* HEADER */}
+      {/* HEADER PAGINA */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', borderBottom: '1px solid #333', paddingBottom: '12px' }}>
         <div>
           <h2 style={{ color: 'white', margin: 0, fontSize: '20px' }}>Gestiune Concedii</h2>
@@ -124,6 +163,26 @@ export default function ConcediiPage() {
         <button onClick={() => setShowForm(!showForm)} style={btnStyle(cyan)}>
           {showForm ? 'INCHIDE FORMULAR' : 'CERERE NOUA'}
         </button>
+      </div>
+
+      {/* TAB-URI NAVIGARE */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
+        {[
+          { id: 'cereri',  label: 'CERERI ACTIVE' },
+          { id: 'istoric', label: 'ARHIVA CONCEDII' },
+        ].map(tab => (
+          <button 
+            key={tab.id} 
+            onClick={() => setTabActiv(tab.id)} 
+            style={{
+              ...btnStyle(tabActiv === tab.id ? roz : '#808080'),
+              backgroundColor: tabActiv === tab.id ? '#2a2d2e' : 'transparent',
+              borderBottom: tabActiv === tab.id ? `2px solid ${roz}` : '1px solid transparent',
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {/* AFISARE ERORI / SUCCES */}
@@ -168,10 +227,8 @@ export default function ConcediiPage() {
         </form>
       )}
 
-      {/* LISTA CERERI (TABEL REZOLVAT CU OPTIONAL CHAINING) */}
-      {loading ? (
-        <div style={{ color: cyan, fontSize: '13px' }}>Se incarca datele din sistem...</div>
-      ) : (
+      {/* ------------------ TAB 1: CERERI ACTIVE ------------------ */}
+      {!loading && tabActiv === 'cereri' && (
         <div style={{ overflowX: 'auto', border: '1px solid #333', backgroundColor: '#252526' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
             <thead>
@@ -188,7 +245,7 @@ export default function ConcediiPage() {
               {Array.isArray(concedii) && concedii.length === 0 ? (
                 <tr>
                   <td colSpan="6" style={{ padding: '16px', textAlign: 'center', color: '#808080' }}>
-                    Nu exista cereri de concediu inregistrate.
+                    Nu exista cereri de concediu inregistrate active.
                   </td>
                 </tr>
               ) : (
@@ -219,21 +276,97 @@ export default function ConcediiPage() {
           </table>
         </div>
       )}
+
+      {/* ------------------ TAB 2: ARHIVA / ISTORIC CONCEDII ------------------ */}
+      {!loading && tabActiv === 'istoric' && (
+        <div>
+          {/* Filtre */}
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
+            <select value={filtruAngajat} onChange={e => setFiltruAngajat(e.target.value)} style={selectStyle}>
+              <option value="">TOTI ANGAJATII</option>
+              {Array.isArray(angajati) && angajati.map(a => (
+                <option key={a.id_angajat} value={a.id_angajat}>
+                  {a.nume} {a.prenume}
+                </option>
+              ))}
+            </select>
+
+            <select value={filtruDept} onChange={e => setFiltruDept(e.target.value)} style={selectStyle}>
+              <option value="">TOATE DEPARTAMENTELE</option>
+              {Array.isArray(departamente) && departamente.map(d => (
+                <option key={d.id_departament} value={d.id_departament}>{d.nume}</option>
+              ))}
+            </select>
+
+            <button onClick={fetchIstoric} style={btnStyle(cyan)}>CAUTA</button>
+            <button onClick={() => {
+              setFiltruAngajat(''); setFiltruDept(''); setFiltruManager('');
+              setIstoric([]);
+            }} style={btnStyle('#808080')}>RESET</button>
+          </div>
+
+          {/* Tabel istoric */}
+          {loadingIstoric ? (
+            <p style={{ color: '#808080' }}>Se incarca...</p>
+          ) : istoric.length === 0 ? (
+            <p style={{ color: '#808080' }}>Selecteaza filtre si apasa CAUTA.</p>
+          ) : (
+            <div style={{ overflowX: 'auto', border: '1px solid #333', backgroundColor: '#252526' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#2d2d2d', borderBottom: '1px solid #333' }}>
+                    {['ANGAJAT', 'DEPARTAMENT', 'TIP', 'INCEPUT', 'SFARSIT', 'ZILE', 'STATUS'].map(h => (
+                      <th key={h} style={thStyle}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {istoric.map((c, idx) => (
+                    <tr key={c.id_concediu} style={{
+                      backgroundColor: idx % 2 === 0 ? '#1e1e1e' : '#252526',
+                      borderBottom: '1px solid #2d2d2d',
+                    }}>
+                      <td style={tdStyle}>{c.prenume_angajat} {c.nume_angajat}</td>
+                      <td style={tdStyle}>{c.departament}</td>
+                      <td style={{ ...tdStyle, color: '#b5cea8' }}>{c.tip}</td>
+                      <td style={tdStyle}>{c.data_start}</td>
+                      <td style={tdStyle}>{c.data_sfarsit}</td>
+                      <td style={{ ...tdStyle, color: cyan }}>{c.zile_solicitate}</td>
+                      <td style={tdStyle}>
+                        <span style={{ color: statusCuloare[c.status] || '#d4d4d4', fontWeight: 'bold' }}>
+                          {c.status?.toUpperCase()}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Indicator incarcare global */}
+      {loading && <div style={{ color: cyan, fontSize: '13px' }}>Se incarca datele din sistem...</div>}
+
     </div>
   );
 }
 
-// Componente secundare interne protejate
+{/* ------------------ COMPONENTE SECUNDARE REUTILIZABILE ------------------ */}
 function ZonaDecizie({ idConcediu, onDecizie }) {
   const [idManager, setIdManager] = useState('1');
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
         <label style={{ color: cyan, fontSize: '11px' }}>ID MANAGER:</label>
-        <input type="number" value={idManager}
+        <input 
+          type="number" 
+          value={idManager}
           onChange={e => setIdManager(e.target.value)}
           style={{ ...inputStyle, width: '120px' }}
-          placeholder="ex: 1" />
+          placeholder="ex: 1" 
+        />
       </div>
       <button onClick={() => onDecizie(idConcediu, 'aprobat', Number(idManager))} disabled={!idConcediu || !idManager} style={btnStyle('#6a9955')}>
         APROBA
@@ -256,50 +389,3 @@ function Camp({ label, name, value, onChange, type = 'text', placeholder, requir
     </div>
   );
 }
-
-// Stiluri CSS-in-JS
-const btnStyle = (culoare) => ({
-  backgroundColor: 'transparent',
-  color: culoare,
-  border: `1px solid ${culoare}`,
-  padding: '8px 16px',
-  fontFamily: 'Consolas, monospace',
-  fontSize: '12px',
-  cursor: 'pointer',
-  letterSpacing: '0.5px',
-  whiteSpace: 'nowrap',
-});
-
-const selectStyle = {
-  backgroundColor: '#3c3c3c',
-  color: 'white',
-  border: '1px solid #555',
-  padding: '8px 12px',
-  fontFamily: 'Consolas, monospace',
-  fontSize: '13px',
-  outline: 'none',
-};
-
-const inputStyle = {
-  backgroundColor: '#3c3c3c',
-  color: 'white',
-  border: '1px solid #555',
-  padding: '8px 12px',
-  fontFamily: 'Consolas, monospace',
-  fontSize: '13px',
-  outline: 'none',
-};
-
-const thStyle = {
-  padding: '12px',
-  color: '#d4d4d4',
-  fontWeight: 'bold',
-  borderBottom: '2px solid #333',
-};
-
-const tdStyle = {
-  padding: '12px',
-  color: '#9cdcfe',
-  verticalAlign: 'middle',
-  whiteSpace: 'nowrap',
-};

@@ -13,7 +13,6 @@ export default function EvaluariPage() {
 
   const [form, setForm] = useState({
     id_angajat:       '',
-    id_evaluator:     '',
     scor_tehnic:      '',
     scor_comunicare:  '',
     scor_leadership:  '',
@@ -48,7 +47,6 @@ export default function EvaluariPage() {
   // CORECTIE CRITICA: Convertim toate câmpurile în numere (Integer) conform cerințelor bazei de date din app.py
   const dateTrimise = {
     id_angajat: parseInt(form.id_angajat, 10),
-    id_evaluator: parseInt(form.id_evaluator, 10),
     scor_tehnic: parseInt(form.scor_tehnic, 10),
     scor_comunicare: parseInt(form.scor_comunicare, 10),
     scor_leadership: parseInt(form.scor_leadership, 10),
@@ -56,12 +54,10 @@ export default function EvaluariPage() {
   };
 
   try {
-    // Presupunând că ai definit ruta în constants/apiRoutes ca API.EVALUARI sau '/api/evaluari'
     await api.post(API.EVALUARI || '/api/evaluari', dateTrimise);
     setSucces('Evaluarea a fost salvata cu succes!');
     setForm({
       id_angajat: '',
-      id_evaluator: '',
       scor_tehnic: '',
       scor_comunicare: '',
       scor_leadership: '',
@@ -125,14 +121,6 @@ export default function EvaluariPage() {
               </option>
             ))}
           </select>
-        </div>
-
-        {/* evaluator */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          <label style={{ color: cyan, fontSize: '11px' }}>ID EVALUATOR: *</label>
-          <input type="number" name="id_evaluator" value={form.id_evaluator}
-            onChange={handleChange} required style={inputStyle}
-            placeholder="ID-ul angajatului care face evaluarea" />
         </div>
 
         {/* scoruri */}
