@@ -7,7 +7,7 @@ const roz  = '#ff22a1';
 const cyan = '#4ec9b0';
 
 function TabelGeneric({ date, titlu }) {
-  if (!date || date.length === 0) {
+  if (!date || date.length === 0 || !date[0]) {
     return <p style={{ color: '#808080', fontSize: '12px' }}>Nu exista date.</p>;
   }
   return (
@@ -74,12 +74,12 @@ export default function EchipaPage() {
     }
 
     if (['hr_manager', 'director', 'ceo'].includes(rol)) {
-      cereri.push(
-        api.get(API.VIEW_SUBORDONATI)
-          .then(res => setSubordonati(res.data.subordonati || res.data || []))
-          .catch(() => {})
-      );
-    }
+    cereri.push(
+      api.get('/echipa')
+        .then(res => setSubordonati(Array.isArray(res.data) ? res.data : res.data.subordonati || []))
+        .catch(() => {})
+    );
+  }
 
     Promise.all(cereri)
       .catch(() => setEroare('Nu s-au putut incarca datele echipei.'))

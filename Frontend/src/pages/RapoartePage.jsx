@@ -82,10 +82,9 @@ export default function RapoartePage() {
   const formatRON = (v) => v ? `${Number(v).toLocaleString('ro-RO')} RON` : '—';
 
   const taburi = [
-    { id: 'salarii',  label: 'RAPORT SALARII',   vizibil: poateFace(rol, 'salarii') },
-    { id: 'concedii', label: 'ISTORIC CONCEDII',  vizibil: ['hr_manager', 'director', 'ceo'].includes(rol) },
-    { id: 'evaluari', label: 'ARHIVA EVALUARI',   vizibil: ['hr_manager', 'director', 'ceo'].includes(rol) },
-  ].filter(t => t.vizibil);
+  { id: 'salarii',  label: 'RAPORT SALARII',  vizibil: poateFace(rol, 'salarii') },
+  { id: 'evaluari', label: 'ARHIVA EVALUARI', vizibil: ['hr_manager', 'director', 'ceo'].includes(rol) },
+].filter(t => t.vizibil);
 
   const TabelGeneric = ({ date }) => {
     if (!date || date.length === 0) return null;
@@ -214,14 +213,13 @@ export default function RapoartePage() {
                   {
                     label: 'SALARIU MEDIU',
                     value: `${Number(
-                      raport.date_raport.reduce((s, r) => s + Number(r.salariu_curent || 0), 0) /
-                      raport.date_raport.length
+                      raport.date_raport[0]?.salariu_mediu || 0
                     ).toLocaleString('ro-RO')} RON`
                   },
                   {
                     label: 'BUGET TOTAL',
                     value: `${Number(
-                      raport.date_raport.reduce((s, r) => s + Number(r.salariu_curent || 0), 0)
+                      raport.date_raport.reduce((s, r) => s + Number(r.masa_salariala_totala || 0), 0)
                     ).toLocaleString('ro-RO')} RON`
                   },
                 ].map(({ label, value }) => (

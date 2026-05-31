@@ -90,23 +90,22 @@ export default function ConcediiPage() {
   const fetchConcedii = () => {
     setLoading(true);
     api.get(API.CONCEDII)
-      .then(res => setConcedii(res.data))
+      .then(res => setConcedii(res.data.date_concedii || res.data || []))
       .catch(() => setErori(['Nu s-au putut incarca cererile active.']))
       .finally(() => setLoading(false));
   };
 
   const fetchIstoric = () => {
-    setLoadingIstoric(true);
-    // Construim parametrii de filtrare
-    const params = {};
-    if (filtruAngajat) params.id_angajat = filtruAngajat;
-    if (filtruDept) params.id_departament = filtruDept;
+  setLoadingIstoric(true);
+  const params = {};
+  if (filtruAngajat) params.id_angajat = filtruAngajat;
+  if (filtruDept)    params.id_departament = filtruDept;
 
-    api.get('/api/concedii/istoric', { params })
-      .then(res => setIstoric(res.data.date || res.data || []))
-      .catch(() => setErori(['Eroare la incarcarea istoricului.']))
-      .finally(() => setLoadingIstoric(false));
-  };
+  api.get('/concedii/istoric-grupare', { params })   // ← numele corect al rutei
+    .then(res => setIstoric(res.data.date_concedii || []))  // ← cheia corectă
+    .catch(() => setErori(['Eroare la incarcarea istoricului.']))
+    .finally(() => setLoadingIstoric(false));
+};
 
   useEffect(() => {
     fetchConcedii();
@@ -140,7 +139,7 @@ export default function ConcediiPage() {
     setErori([]);
     setSucces('');
     
-    api.put(`/api/concedii/${idConcediu}`, { status: statusNou, id_aprobator: idManager })
+    api.put(`/api/concedii/decizie/${idConcediu}`, { status: statusNou, id_manager: idManager })
       .then(() => {
         setSucces(`Cererea a fost ${statusNou}a cu succes!`);
         fetchConcedii();

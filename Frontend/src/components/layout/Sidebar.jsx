@@ -10,53 +10,22 @@ export default function Sidebar() {
   const rol = user?.rol || '';
 
   // Definim lista de linkuri direct cu verificări clare pentru PM
-  const linkuri = [
-    { 
-      to: '/dashboard',    
-      label: 'DASHBOARD',    
-      vizibil: true 
-    },
-    { 
-      to: '/angajati',     
-      label: 'ANGAJATI',     
-      vizibil: rol === 'project_manager' ? true : (typeof poateFace === 'function' ? poateFace(rol, 'angajati') : false)
-    },
-    { 
-      to: '/angajati/arhiva', 
-      label: 'ARHIVA',    
-      vizibil: rol === 'project_manager' ? true : (typeof poateFace === 'function' ? poateFace(rol, 'angajati') : false)
-    },
-    { 
-      to: '/concedii',     
-      label: 'CONCEDII',     
-      vizibil: typeof poateFace === 'function' ? poateFace(rol, 'concedii') : false 
-    },
-    { 
-      to: '/evaluari',     
-      label: 'EVALUARI',     
-      vizibil: typeof poateFace === 'function' ? poateFace(rol, 'evaluari') : false 
-    },
-    { 
-      to: '/proiecte',     
-      label: 'PROIECTE',     
-      vizibil: rol === 'project_manager' ? true : (typeof poateFace === 'function' ? poateFace(rol, 'proiecte') : false)
-    },
-    { 
-      to: '/departamente', 
-      label: 'DEPARTAMENTE', 
-      vizibil: rol === 'project_manager' ? true : (typeof poateFace === 'function' ? poateFace(rol, 'departamente') : false)
-    },
-    { 
-      to: '/pozitii',      
-      label: 'POZITII',      
-      vizibil: rol === 'project_manager' ? true : (typeof poateFace === 'function' ? poateFace(rol, 'pozitii') : false)
-    },
-    { 
-      to: '/beneficii',    
-      label: 'BENEFICII',    
-      vizibil: typeof poateFace === 'function' ? poateFace(rol, 'beneficii') : false 
-    }
-  ];
+ const linkuri = [
+  { to: '/dashboard',      label: 'DASHBOARD',      vizibil: true },
+  { to: '/angajati',       label: 'ANGAJATI',        vizibil: poateFace(rol, 'angajati') },
+  { to: '/angajati/arhiva',label: 'ARHIVA',          vizibil: poateFace(rol, 'angajati') },
+  { to: '/concedii',       label: 'CONCEDII',        vizibil: poateFace(rol, 'concedii') },
+  { to: '/evaluari',       label: 'EVALUARI',        vizibil: poateFace(rol, 'evaluari') },
+  { to: '/proiecte',       label: 'PROIECTE',        vizibil: poateFace(rol, 'proiecte') },
+  { to: '/departamente',   label: 'DEPARTAMENTE',    vizibil: poateFace(rol, 'departamente') },
+  { to: '/pozitii',        label: 'POZITII',         vizibil: poateFace(rol, 'pozitii') },
+  { to: '/beneficii',      label: 'BENEFICII',       vizibil: poateFace(rol, 'beneficii') },
+  { to: '/ml',             label: 'ML COMPARATIE',   vizibil: rol === 'ceo' || rol === 'director' },
+  { to: '/echipa',         label: 'ECHIPA',          vizibil: ['ceo', 'director', 'hr_manager', 'team_leader', 'project_manager'].includes(rol) },
+  { to: '/rapoarte',       label: 'RAPOARTE',        vizibil: ['ceo', 'director', 'hr_manager'].includes(rol) },
+  { to: '/audit',          label: 'AUDIT',           vizibil: rol === 'ceo' || rol === 'director' },
+  { to: '/hr-view',        label: 'HR VIEW',         vizibil: ['ceo', 'director', 'hr_manager'].includes(rol) },
+];
 
   const linkuriVizibile = Array.isArray(linkuri) ? linkuri.filter(l => l && l.vizibil) : [];
 

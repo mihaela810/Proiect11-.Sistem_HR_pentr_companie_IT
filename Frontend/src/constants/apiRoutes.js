@@ -39,7 +39,7 @@ const API = {
 
   // proiecte
   PROIECTE:           '/proiecte',
-  PROIECT_DETALII: (id) => `/proiecte/${id}`,
+  PROIECT_DETALII: (id) => `/detalii-proiecte/${id}`,
 
   // beneficii
   BENEFICII:          '/beneficii',

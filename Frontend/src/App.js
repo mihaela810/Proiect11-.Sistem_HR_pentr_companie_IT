@@ -61,7 +61,7 @@ function App() {
           <Route path="/audit"                  element={<AuditPage />} />
           <Route path="/hr-view"                element={<HRViewPage />} />
           <Route path="/departamente/:id" element={<DepartamentDetaliiPage />} />
-          <Route path="/proiecte/:id" element={<ProiectDetaliiPage />} />
+          <Route path="/detalii-proiecte/:id" element={<ProiectDetaliiPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

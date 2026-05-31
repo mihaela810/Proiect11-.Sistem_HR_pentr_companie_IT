@@ -770,8 +770,11 @@ def get_istoric_concedii_avansat():
         conn   = get_db_connection()
         cursor = conn.cursor(dictionary=True)
         query  = """
-            SELECT c.*, a.nume, a.prenume, a.id_departament, c.id_aprobator
-            FROM concedii c JOIN angajati a ON c.id_angajat = a.id_angajat WHERE 1=1
+            SELECT c.*, a.nume, a.prenume, d.nume AS departament, c.id_aprobator
+            FROM concedii c 
+            JOIN angajati a ON c.id_angajat = a.id_angajat
+            JOIN departamente d ON a.id_departament = d.id_departament
+            WHERE 1=1
         """
         params = []
         if id_angajat:     query += " AND c.id_angajat = %s";     params.append(id_angajat)
@@ -1151,6 +1154,30 @@ def gestionare_proiecte():
         finally:
             conn.close()
 
+@app.route('/api/proiecte/ale-mele', methods=['GET'])
+@jwt_required()
+def get_proiectele_mele():
+    id_utilizator = get_jwt_identity()
+    try:
+        conn   = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT id_angajat FROM utilizatori WHERE id_utilizator = %s", (id_utilizator,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({"error": "Angajat negasit"}), 404
+        cursor.execute("""
+            SELECT p.id_proiect, p.nume, p.descriere, p.status,
+                   p.data_start, p.data_sfarsit, p.buget, ap.rol_proiect, ap.ore_alocate
+            FROM alocari_proiecte ap JOIN proiecte p ON ap.id_proiect = p.id_proiect
+            WHERE ap.id_angajat = %s ORDER BY p.data_start DESC
+        """, (row['id_angajat'],))
+        return jsonify({"status": "succes", "proiecte": cursor.fetchall()}), 200
+    except mysql.connector.Error as err:
+        return jsonify({"status": "eroare_db", "detalii": str(err)}), 500
+    finally:
+        if 'conn' in locals(): conn.close()
+
+
 @app.route('/api/proiecte/<int:id_proiect>', methods=['GET'])
 @jwt_required()
 def get_proiect(id_proiect):
@@ -1177,30 +1204,6 @@ def get_proiect(id_proiect):
         proiect['total_angajati'] = len(proiect['angajati'])
 
         return jsonify(proiect), 200
-    except mysql.connector.Error as err:
-        return jsonify({"status": "eroare_db", "detalii": str(err)}), 500
-    finally:
-        if 'conn' in locals(): conn.close()
-
-
-@app.route('/api/proiecte/ale-mele', methods=['GET'])
-@jwt_required()
-def get_proiectele_mele():
-    id_utilizator = get_jwt_identity()
-    try:
-        conn   = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT id_angajat FROM utilizatori WHERE id_utilizator = %s", (id_utilizator,))
-        row = cursor.fetchone()
-        if not row:
-            return jsonify({"error": "Angajat negasit"}), 404
-        cursor.execute("""
-            SELECT p.id_proiect, p.nume, p.descriere, p.status,
-                   p.data_start, p.data_sfarsit, p.buget, ap.rol_proiect, ap.ore_alocate
-            FROM alocari_proiecte ap JOIN proiecte p ON ap.id_proiect = p.id_proiect
-            WHERE ap.id_angajat = %s ORDER BY p.data_start DESC
-        """, (row['id_angajat'],))
-        return jsonify({"status": "succes", "proiecte": cursor.fetchall()}), 200
     except mysql.connector.Error as err:
         return jsonify({"status": "eroare_db", "detalii": str(err)}), 500
     finally:
@@ -1977,7 +1980,7 @@ def actualizeaza_profil_meu():
 
 @app.route('/api/echipa', methods=['GET'])
 @jwt_required()
-@rol_required('team_leader', 'app_readonly', 'project_manager', 'hr_manager')
+@rol_required('team_leader', 'app_readonly', 'project_manager', 'hr_manager', 'director', 'ceo')
 def get_echipa_mea():
     identity = get_jwt_identity() 
     try:
@@ -2012,7 +2015,7 @@ def get_echipa_mea():
             cursor.close()
             conn.close()
 
-@app.route('/api/proiecte/<int:id_proiect>', methods=['GET'])
+@app.route('/api/detalii-proiecte/<int:id_proiect>', methods=['GET'])
 @jwt_required()
 def get_detalii_proiect(id_proiect):
     try:
