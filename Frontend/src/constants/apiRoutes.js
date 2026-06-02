@@ -68,11 +68,13 @@ const API = {
   PROFIL_MEU_UPDATE: '/angajati/profil-meu',
 
   // Director
-  DIRECTOR_INFO:          '/api/director/info',
-  DIRECTOR_ANGAJATI:      '/api/director/angajati',
-  DIRECTOR_DEPARTAMENTE:  '/api/director/departamente',
-  DIRECTOR_PROIECTE:      '/api/director/proiecte',
-  DIRECTOR_ARHIVA:        '/api/director/arhiva',
+  DIRECTOR_INFO:         '/director/info',
+  DIRECTOR_ANGAJATI:     '/director/angajati',
+  DIRECTOR_DEPARTAMENTE: '/director/departamente',
+  DIRECTOR_PROIECTE:     '/director/proiecte',
+  DIRECTOR_ARHIVA:       '/director/arhiva',
+  HR_DEPARTAMENTE:       '/hr/departamente',
+  MEU_EVALUARI_FACUTE:   '/evaluari',
 
 // HR Specialist
   HR_DEPARTAMENTE:        '/api/hr/departamente',

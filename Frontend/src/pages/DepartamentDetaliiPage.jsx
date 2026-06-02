@@ -24,8 +24,12 @@ export default function DepartamentDetaliiPage() {
   if (eroare)  return <p style={{ color: roz, fontFamily: 'Consolas, monospace' }}>ERROR: {eroare}</p>;
   if (!dept)   return null;
 
+  // Definim sigurante pentru liste
+  const angajati = dept.angajati || [];
+  const totalAngajati = dept.total_angajati ?? angajati.length;
+
   return (
-    <div style={{ fontFamily: 'Consolas, monospace', maxWidth: '900px' }}>
+    <div style={{ fontFamily: 'Consolas, monospace', maxWidth: '900px', padding: '20px', color: '#d4d4d4' }}>
 
       {/* header */}
       <div style={{ marginBottom: '28px' }}>
@@ -39,7 +43,7 @@ export default function DepartamentDetaliiPage() {
           <span style={{ color: cyan }}>{'>'}</span> {dept.nume}
         </h2>
         <p style={{ color: '#6a9955', fontSize: '12px', margin: '6px 0 0' }}>
-          {dept.total_angajati} angajati · {dept.locatie || 'locatie necunoscuta'}
+          {totalAngajati} angajati · {dept.locatie || 'locatie necunoscuta'}
         </p>
       </div>
 
@@ -49,19 +53,23 @@ export default function DepartamentDetaliiPage() {
         borderLeft: `3px solid ${cyan}`, padding: '20px 24px',
         marginBottom: '28px', borderRadius: '2px',
       }}>
+        {/* AICI ERA DIV-UL COMPLEMENTAR DE GRID CARE LIPSEA */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-          <InfoRow label="LOCATIE"  value={dept.locatie} />
-          <InfoRow label="MANAGER"  value={dept.nume_manager ? `${dept.prenume_manager} ${dept.nume_manager}` : '—'} />
-          {dept.descriere && <InfoRow label="DESCRIERE" value={dept.descriere} />}
-        </div>
+          <InfoRow label="LOCATIE" value={dept.locatie} />
+          <InfoRow
+            label="MANAGER"
+            value={dept.nume_manager ? `${dept.prenume_manager} ${dept.nume_manager}` : '—'}
+          />
+          <InfoRow label="TOTAL ANGAJATI" value={totalAngajati} />
+        </div> 
       </div>
 
       {/* tabel angajati */}
       <h3 style={{ color: cyan, fontSize: '13px', margin: '0 0 12px' }}>
-        ANGAJATI ({dept.total_angajati})
+        ANGAJATI ({totalAngajati})
       </h3>
 
-      {dept.angajati.length === 0 ? (
+      {angajati.length === 0 ? (
         <p style={{ color: '#808080', fontSize: '12px' }}>Nu exista angajati in acest departament.</p>
       ) : (
         <div style={{ overflowX: 'auto' }}>
@@ -77,7 +85,7 @@ export default function DepartamentDetaliiPage() {
               </tr>
             </thead>
             <tbody>
-              {dept.angajati.map((a, idx) => (
+              {angajati.map((a, idx) => (
                 <tr key={a.id_angajat}
                   onClick={() => navigate(`/angajati/${a.id_angajat}`)}
                   style={{

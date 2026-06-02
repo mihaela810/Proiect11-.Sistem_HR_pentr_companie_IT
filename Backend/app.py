@@ -1003,44 +1003,41 @@ def get_sinteza_departamente():
 
 @app.route('/api/departamente/<int:id_departament>', methods=['GET'])
 @jwt_required()
-def get_departament(id_departament):
+def get_detalii_departament(id_departament):
     try:
-        conn = get_db_connection()
+        conn   = get_db_connection()
         cursor = conn.cursor(dictionary=True)
 
         cursor.execute("""
-            SELECT d.*, 
-                   a.nume AS nume_manager, 
-                   a.prenume AS prenume_manager
-            FROM departamente d
-            LEFT JOIN manageri m ON d.id_manager = m.id_manager
-            LEFT JOIN angajati a ON m.id_angajat = a.id_angajat
-            WHERE d.id_departament = %s
-        """, (id_departament,))
-        departament = cursor.fetchone()
+    SELECT d.id_departament, d.nume, d.locatie,
+           m.nume AS nume_manager, m.prenume AS prenume_manager
+    FROM departamente d
+    LEFT JOIN angajati m ON d.id_manager = m.id_angajat
+    WHERE d.id_departament = %s
+""", (id_departament,))
+        dept = cursor.fetchone()
 
-        if not departament:
+        if not dept:
             return jsonify({"status": "eroare", "mesaj": "Departamentul nu a fost gasit."}), 404
 
         cursor.execute("""
-            SELECT a.id_angajat, a.nume, a.prenume, 
-                   a.email, p.titlu AS pozitie, a.status
+            SELECT a.id_angajat, a.nume, a.prenume, a.email,
+                   p.titlu AS pozitie, a.status
             FROM angajati a
-            JOIN pozitii p ON a.id_pozitie = p.id_pozitie
+            LEFT JOIN pozitii p ON a.id_pozitie = p.id_pozitie
             WHERE a.id_departament = %s
             ORDER BY a.nume ASC
         """, (id_departament,))
-        departament['angajati'] = cursor.fetchall()
-        departament['total_angajati'] = len(departament['angajati'])
+        dept['angajati'] = cursor.fetchall()
+        dept['total_angajati'] = len(dept['angajati'])
 
-        return jsonify(departament), 200
+        return jsonify(dept), 200
 
     except mysql.connector.Error as err:
         return jsonify({"status": "eroare_db", "detalii": str(err)}), 500
     finally:
         if 'conn' in locals() and conn.is_connected():
-            cursor.close()
-            conn.close()
+            cursor.close(); conn.close()
 
 
 # ── POZITII ──────────────────────────────────────────────────────────────────
@@ -2023,7 +2020,7 @@ def get_detalii_proiect(id_proiect):
         cursor = conn.cursor(dictionary=True)
         
         cursor.execute("""
-            SELECT id_proiect, nume, descriere, data_start, data_sfarsit, status 
+            SELECT id_proiect, nume, descriere, data_start, data_sfarsit, status, buget
             FROM proiecte 
             WHERE id_proiect = %s
         """, (id_proiect,))
@@ -2031,6 +2028,18 @@ def get_detalii_proiect(id_proiect):
         
         if not proiect:
             return jsonify({"status": "eroare", "mesaj": "Proiectul nu a fost gasit."}), 404
+
+        cursor.execute("""
+            SELECT a.id_angajat, a.nume, a.prenume,
+                   p.titlu AS pozitie, ap.rol_proiect, ap.ore_alocate
+            FROM alocari_proiecte ap
+            JOIN angajati a ON ap.id_angajat = a.id_angajat
+            LEFT JOIN pozitii p ON a.id_pozitie = p.id_pozitie
+            WHERE ap.id_proiect = %s
+            ORDER BY a.nume ASC
+        """, (id_proiect,))
+        proiect['angajati'] = cursor.fetchall()
+        proiect['total_angajati'] = len(proiect['angajati'])
             
         return jsonify(proiect), 200
 

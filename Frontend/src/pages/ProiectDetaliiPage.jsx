@@ -14,8 +14,9 @@ const statusCuloare = {
 };
 
 export default function ProiectDetaliiPage() {
-  const { id }      = useParams();
-  const navigate    = useNavigate();
+  const { id }    = useParams();
+  const navigate  = useNavigate();
+
   const [proiect, setProiect] = useState(null);
   const [loading, setLoading] = useState(true);
   const [eroare, setEroare]   = useState(null);
@@ -30,21 +31,32 @@ export default function ProiectDetaliiPage() {
   const formatRON  = (v) => v ? `${Number(v).toLocaleString('ro-RO')} RON` : '—';
   const formatData = (d) => d ? new Date(d).toLocaleDateString('ro-RO') : '—';
 
-  if (loading) return <p style={{ color: '#808080', fontFamily: 'Consolas, monospace' }}>Se incarca...</p>;
-  if (eroare)  return <p style={{ color: roz, fontFamily: 'Consolas, monospace' }}>ERROR: {eroare}</p>;
+  if (loading) return (
+    <p style={{ color: '#808080', fontFamily: 'Consolas, monospace' }}>Se incarca...</p>
+  );
+  if (eroare) return (
+    <p style={{ color: roz, fontFamily: 'Consolas, monospace' }}>ERROR: {eroare}</p>
+  );
   if (!proiect) return null;
+
+  const angajati = proiect.angajati || [];
 
   return (
     <div style={{ fontFamily: 'Consolas, monospace', maxWidth: '900px' }}>
 
-      {/* header */}
+      {/* Header */}
       <div style={{ marginBottom: '28px' }}>
-        <button onClick={() => navigate('/proiecte')}
-          style={{ color: '#808080', background: 'none', border: 'none',
+        <button
+          onClick={() => navigate('/proiecte')}
+          style={{
+            color: '#808080', background: 'none', border: 'none',
             fontFamily: 'Consolas, monospace', fontSize: '12px',
-            cursor: 'pointer', marginBottom: '12px', padding: 0 }}>
+            cursor: 'pointer', marginBottom: '12px', padding: 0,
+          }}
+        >
           ← INAPOI
         </button>
+
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <h2 style={{ color: roz, margin: 0, fontSize: '18px' }}>
             <span style={{ color: cyan }}>{'>'}</span> {proiect.nume}
@@ -57,12 +69,13 @@ export default function ProiectDetaliiPage() {
             {proiect.status?.toUpperCase()}
           </span>
         </div>
+
         <p style={{ color: '#6a9955', fontSize: '12px', margin: '6px 0 0' }}>
-          {proiect.total_angajati} angajati alocati
+          {proiect.total_angajati ?? 0} angajati alocati
         </p>
       </div>
 
-      {/* info proiect */}
+      {/* Info proiect */}
       <div style={{
         backgroundColor: '#252526', border: '1px solid #333',
         borderLeft: `3px solid ${statusCuloare[proiect.status] || cyan}`,
@@ -74,6 +87,7 @@ export default function ProiectDetaliiPage() {
           <InfoRow label="BUGET"        value={formatRON(proiect.buget)} />
           <InfoRow label="ID PROIECT"   value={proiect.id_proiect} />
         </div>
+
         {proiect.descriere && (
           <div style={{ marginTop: '16px' }}>
             <div style={{ color: '#808080', fontSize: '10px', marginBottom: '6px', letterSpacing: '1px' }}>
@@ -86,30 +100,34 @@ export default function ProiectDetaliiPage() {
         )}
       </div>
 
-      {/* tabel angajati alocati */}
+      {/* Tabel angajati */}
       <h3 style={{ color: cyan, fontSize: '13px', margin: '0 0 12px' }}>
-
-    ANGAJATI ALOCATI ({proiect.total_angajati})
+        ANGAJATI ALOCATI ({proiect.total_angajati ?? 0})
       </h3>
 
-      {proiect.angajati.length === 0 ? (
-        <p style={{ color: '#808080', fontSize: '12px' }}>Nu exista angajati alocati pe acest proiect.</p>
+      {angajati.length === 0 ? (
+        <p style={{ color: '#808080', fontSize: '12px' }}>
+          Nu exista angajati alocati pe acest proiect.
+        </p>
       ) : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${roz}` }}>
                 {['NUME', 'PRENUME', 'POZITIE', 'ROL PROIECT', 'ORE ALOCATE'].map(h => (
-                  <th key={h} style={{ textAlign: 'left', padding: '8px 12px',
-                    color: cyan, fontWeight: 'normal', whiteSpace: 'nowrap' }}>
+                  <th key={h} style={{
+                    textAlign: 'left', padding: '8px 12px',
+                    color: cyan, fontWeight: 'normal', whiteSpace: 'nowrap',
+                  }}>
                     {h}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {proiect.angajati.map((a, idx) => (
-                <tr key={a.id_angajat}
+              {angajati.map((a, idx) => (
+                <tr
+                  key={a.id_angajat}
                   onClick={() => navigate(`/angajati/${a.id_angajat}`)}
                   style={{
                     backgroundColor: idx % 2 === 0 ? '#1e1e1e' : '#252526',
@@ -121,7 +139,7 @@ export default function ProiectDetaliiPage() {
                 >
                   <td style={tdStyle}>{a.nume}</td>
                   <td style={tdStyle}>{a.prenume}</td>
-                  <td style={tdStyle}>{a.pozitie}</td>
+                  <td style={tdStyle}>{a.pozitie || '—'}</td>
                   <td style={tdStyle}>{a.rol_proiect || '—'}</td>
                   <td style={tdStyle}>{a.ore_alocate ?? '—'}</td>
                 </tr>

@@ -181,11 +181,18 @@ export default function DepartamentePage() {
       {!loading && departamente.length > 0 && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
           {departamente.map(d => (
-            <div key={d.id_departament} style={{
-              backgroundColor: '#252526', border: '1px solid #333',
-              borderTop: `2px solid ${cyan}`, padding: '16px',
-              display: 'flex', flexDirection: 'column', gap: '10px'
-            }}>
+            <div
+              key={d.id_departament}
+              onClick={() => navigate(`/departamente/${d.id_departament}`)}
+              style={{
+                backgroundColor: '#252526', border: '1px solid #333',
+                borderTop: `2px solid ${cyan}`, padding: '16px',
+                display: 'flex', flexDirection: 'column', gap: '10px',
+                cursor: 'pointer',
+              }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = roz}
+              onMouseLeave={e => e.currentTarget.style.borderColor = '#333'}
+            >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <h4 style={{ color: 'white', margin: 0, fontSize: '15px', letterSpacing: '0.5px' }}>
                   {d.nume}
